@@ -7,14 +7,14 @@ Template :: struct {
     parameters: [..] string;
 }
 
-init_template_system :: () {
+init_template_system :: (relative_template_path: string) {
     init(*template_variables, 32);
     working_directory, success := get_working_directory();
     if !success {
         print("failed to get current working directory");
         return;
     }
-    template_path := tprint("%/templates", working_directory);
+    template_path := tprint("%1%2", working_directory, relative_template_path);
     list := file_list(template_path, true);
     for list {
         short_name := replace(replace(it, tprint("%/", template_path), ""), ".template", "");

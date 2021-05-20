@@ -3,6 +3,7 @@
 #import "Hash_Table";
 #import "File";
 #import "File_Utilities";
+#import "Regexp";
 
 #load "src/Template.jai";
 #load "src/Request.jai";
@@ -11,7 +12,7 @@
 
 main :: () {
     set_working_directory(#filepath);
-    init_template_system();
+    init_template_system("/templates");
     init_router();
 
     add_route("/", (req: *Request) {
@@ -21,7 +22,7 @@ main :: () {
         output("index");
     });
 
-    add_route("/posts/:id", (req: *Request) {
+    add_route("/posts/%{id}", (req: *Request) {
         bind("site_title", "Best Website");
         bind("page_title", "This will be dynamic at some point");
         bind("post_title", "First blog post");
@@ -30,7 +31,6 @@ main :: () {
         output("index");
     });
 
-    //req: Request = .{.GET, "/"};
-    req: Request = .{.GET, "/posts/1"};
+    req := Request.{method=.GET, path="/posts/1"};
     route_request(*req);
 }

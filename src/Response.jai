@@ -4,6 +4,7 @@ Response_Proc :: #type (req: *Request);
 
 Response :: struct {
     body: string;
+    headers: [..] string;
 }
 
 create_response :: () -> *Response {
