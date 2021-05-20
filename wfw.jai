@@ -5,16 +5,7 @@
 #import "File_Utilities";
 
 #load "src/Template.jai";
-
-#add_context response: *Response = null;
-
-Response :: struct {
-}
-
-create_response :: () -> *Response {
-    res := New(Response);
-    return res;
-}
+#load "src/Response.jai";
 
 test_response :: () {
     res := create_response();
@@ -23,14 +14,17 @@ test_response :: () {
     push_context new_context {
         bind("site_title", "Best Website");
         bind("page_title", "Home");
-        bind("body", "Welcome to my website.");
+        bind_output("body", "home");
         output("index");
+        write_string("\n\n");
+        write_string(context.response.body);
+        write_string("\n\n");
     }
     
 }
 
 main :: () {
-    tpl_init();
-
+    set_working_directory(#filepath);
+    init_template_system();
     test_response();
 }

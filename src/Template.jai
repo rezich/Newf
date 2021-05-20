@@ -7,14 +7,20 @@ Template :: struct {
     parameters: [..] string;
 }
 
-tpl_init :: () {
+init_template_system :: () {
     init(*template_variables, 32);
-    template_path := tprint("%/templates", #filepath);
+    working_directory, success := get_working_directory();
+    if !success {
+        print("failed to get current working directory");
+        return;
+    }
+    template_path := tprint("%/templates", working_directory);
     list := file_list(template_path, true);
     for list {
         short_name := replace(replace(it, tprint("%/", template_path), ""), ".template", "");
         contents, success := read_entire_file(it);
         if success then table_add(*templates, short_name, parse(contents));
+        else print("failed to load template: %\n", it);
     }
 }
 
@@ -72,16 +78,28 @@ bind :: (variable_name: string, value: Any) {
     table_add(*template_variables, variable_name, value);
 }
 
-output :: (template: *Template) {
+output_string :: (template: *Template) -> string #must {
     output_params: [..] Any;
     for param: template.parameters {
         value, success := table_find(template_variables, param);
         array_add(*output_params, ifx success then value else tprint("!!PARAM ERROR: % !!", param));
     }
-    print(template.output_body, .. output_params);
+    return tprint(template.output_body, .. output_params);
+}
+
+output_string :: (template_name: string) -> string #must {
+    template, success := table_find(templates, template_name);
+    if success then return output_string(template);
+    else print("failed to output template: %", template_name);
+    return "---";
 }
 
 output :: (template_name: string) {
+    context.response.body = output_string(template_name);
+}
+
+bind_output :: inline (variable_name: string, template_name: string) {
     template, success := table_find(templates, template_name);
-    if success then output(template);
+    if success then bind(variable_name, output_string(template));
+    else print("failed to output template: %", template_name);
 }
