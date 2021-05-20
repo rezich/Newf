@@ -5,26 +5,32 @@
 #import "File_Utilities";
 
 #load "src/Template.jai";
+#load "src/Request.jai";
 #load "src/Response.jai";
-
-test_response :: () {
-    res := create_response();
-    new_context := context;
-    new_context.response = res;
-    push_context new_context {
-        bind("site_title", "Best Website");
-        bind("page_title", "Home");
-        bind_output("body", "home");
-        output("index");
-        write_string("\n\n");
-        write_string(context.response.body);
-        write_string("\n\n");
-    }
-    
-}
+#load "src/Route.jai";
 
 main :: () {
     set_working_directory(#filepath);
     init_template_system();
-    test_response();
+    init_router();
+
+    add_route("/", (req: *Request) {
+        bind("site_title", "Best Website");
+        bind("page_title", "Home");
+        bind_output("body", "home");
+        output("index");
+    });
+
+    add_route("/posts/:id", (req: *Request) {
+        bind("site_title", "Best Website");
+        bind("page_title", "This will be dynamic at some point");
+        bind("post_title", "First blog post");
+        bind("post_body", "This is a blog post!");
+        bind_output("body", "blog/post");
+        output("index");
+    });
+
+    //req: Request = .{.GET, "/"};
+    req: Request = .{.GET, "/posts/1"};
+    route_request(*req);
 }
