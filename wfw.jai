@@ -15,22 +15,23 @@ main :: () {
     init_template_system("/templates");
     init_router();
 
-    add_route("/", (req: *Request) {
+    add_route("^/$", (req: *Request) {
+        defer output("index");
         bind("site_title", "Best Website");
         bind("page_title", "Home");
         bind_output("body", "home");
-        output("index");
     });
 
-    add_route("/posts/%{id}", (req: *Request) {
+    add_route("^/posts/.*$", (req: *Request) {
+        defer output("index");
         bind("site_title", "Best Website");
         bind("page_title", "This will be dynamic at some point");
         bind("post_title", "First blog post");
         bind("post_body", "This is a blog post!");
         bind_output("body", "blog/post");
-        output("index");
     });
-
+    
+    //req := Request.{method=.GET, path="/"};
     req := Request.{method=.GET, path="/posts/1"};
     route_request(*req);
 }
