@@ -26,6 +26,6 @@ make_request :: (method: Request_Method, path: string) -> *Request {
     return req;
 }
 
-deinit :: (req: *Request) {
-    deinit(*req.params);
+deinit :: (using req: *Request) {
+    deinit(*params);
 }

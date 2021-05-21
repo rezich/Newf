@@ -14,7 +14,7 @@ SITE_TITLE :: "Best Website!";
 
 main :: () {
     set_working_directory(#filepath);
-    init_template_system("/templates");
+    init_template_system("/templates", ".template");
 
     add_route("/", (req: *Request) {
         defer output("index");
@@ -56,6 +56,10 @@ main :: () {
         bind("page_title", "Page not found");
         bind_output("body", "404");
         context.response.status = 404;
+        /*  why is response in context?
+            It seemed like a good idea at the time but I guess it could just be
+                (req: *Request, res: *Response)
+            , which is maybe ok?  */
     });
     
     //req := make_request(method=.GET, path="/posts/111/edit");

@@ -58,11 +58,11 @@ route_request :: (req: *Request) {
     deinit(req);
 }
 
-parse_route_path :: (route: *Route, path: string) {
+parse_route_path :: (using route: *Route, path: string) {
     if path == "*" {
         piece: Route_Piece;
         piece.type = .WILDCARD;
-        array_add(*route.pieces, piece);
+        array_add(*pieces, piece);
         return;
     }
     if !begins_with(path, "/") {
@@ -87,8 +87,8 @@ parse_route_path :: (route: *Route, path: string) {
             piece: Route_Piece;
             if begins_with(str, ":") then piece.type = Route_Piece_Type.PARAM_INT;
             else piece.type = Route_Piece_Type.PARAM_STRING;
-            array_add(*route.pieces, piece);
-            array_add(*route.params, new_param);
+            array_add(*pieces, piece);
+            array_add(*params, new_param);
             str = slice(str, end, str.count);
         }
         else {
@@ -96,7 +96,7 @@ parse_route_path :: (route: *Route, path: string) {
             piece: Route_Piece;
             piece.type = .PATH;
             piece.text = slice(str, 0, end);
-            array_add(*route.pieces, piece);
+            array_add(*pieces, piece);
             str = slice(str, end, str.count);
         }
     }

@@ -4,10 +4,10 @@ template_variables: Table(string, Any);
 Template :: struct {
     body: string;
     output_body: string;
-    parameters: [..] string;
+    params: [..] string;
 }
 
-init_template_system :: (relative_template_path: string) {
+init_template_system :: (relative_template_path: string, extension: string = ".template") {
     init(*template_variables, 32);
     working_directory, success := get_working_directory();
     if !success {
@@ -17,7 +17,7 @@ init_template_system :: (relative_template_path: string) {
     template_path := tprint("%1%2", working_directory, relative_template_path);
     list := file_list(template_path, true);
     for list {
-        short_name := replace(replace(it, tprint("%/", template_path), ""), ".template", "");
+        short_name := replace(replace(it, tprint("%/", template_path), ""), extension, "");
         contents, success := read_entire_file(it);
         if success then table_add(*templates, short_name, parse(contents));
         else print("failed to load template: %\n", it);
@@ -49,9 +49,9 @@ parse :: (input: string) -> *Template {
         new_param := slice(str, start + 2, end - start - 2);
         
         inserting_n: int;
-        found, inserting_n = array_find(tpl.parameters, new_param);
+        found, inserting_n = array_find(tpl.params, new_param);
         if !found {
-            array_add(*tpl.parameters, new_param);
+            array_add(*tpl.params, new_param);
             inserting_n = n;
             n += 1;
         }
@@ -78,13 +78,13 @@ bind :: (variable_name: string, value: Any) {
     table_add(*template_variables, variable_name, value);
 }
 
-output_string :: (template: *Template) -> string #must {
+output_string :: (using template: *Template) -> string #must {
     output_params: [..] Any;
-    for param: template.parameters {
+    for param: params {
         value, success := table_find(template_variables, param);
         array_add(*output_params, ifx success then value else tprint("!!PARAM ERROR: % !!", param));
     }
-    return tprint(template.output_body, .. output_params);
+    return tprint(output_body, .. output_params);
 }
 
 output_string :: (template_name: string) -> string #must {

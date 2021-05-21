@@ -14,8 +14,8 @@ create_response :: () -> *Response {
     return res;
 }
 
-deinit :: (res: *Response) {
-    uninit(*res.headers);
+deinit :: (using res: *Response) {
+    uninit(*headers);
 }
 
 respond :: (req: *Request, proc: Response_Proc) {
