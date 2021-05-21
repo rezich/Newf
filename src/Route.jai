@@ -13,8 +13,8 @@ examples:
     /users/$username
 
 notes:
-    must begin with slash
-    drops any trailing slash (except for the path "/")
+    must begin with slash (except for the path "*")
+    must not end with a slash (except for the path "/")
 */
 
 
@@ -25,6 +25,7 @@ Route :: struct {
 }
 
 Route_Piece_Type :: enum {
+    WILDCARD;
     PATH;
     PARAM_INT;
     PARAM_STRING;
@@ -58,6 +59,12 @@ route_request :: (req: *Request) {
 }
 
 parse_route_path :: (route: *Route, path: string) {
+    if path == "*" {
+        piece: Route_Piece;
+        piece.type = .WILDCARD;
+        array_add(*route.pieces, piece);
+        return;
+    }
     if !begins_with(path, "/") {
         print("Path must begin with a forward slash!!");
         return;
@@ -109,18 +116,22 @@ route_matches :: (req: *Request, route: *Route) -> bool {
         piece := *route.pieces[n];
 
         if piece.type == {
+            case .WILDCARD;
+                str = ""; // hack?
             case .PATH;
                 if !begins_with(str, piece.text) then return false;
                 str = slice(str, piece.text.count, str.count);
             case .PARAM_INT;
                 end_of_param, found = index_of_char(str, #char "/");
                 if !found then end_of_param = str.count;
+                if end_of_param == 0 then break;
                 add_int(*params, route.params[current_param], string_to_int(slice(str, 0, end_of_param)));
                 str = slice(str, end_of_param, str.count);
                 current_param += 1;
             case .PARAM_STRING;
                 end_of_param, found = index_of_char(str, #char "/");
                 if !found then end_of_param = str.count;
+                if end_of_param == 0 then break;
                 add_string(*params, route.params[current_param], slice(str, 0, end_of_param));
                 str = slice(str, end_of_param, str.count);
                 current_param += 1;
