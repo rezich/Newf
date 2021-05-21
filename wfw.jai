@@ -3,7 +3,6 @@
 #import "Hash_Table";
 #import "File";
 #import "File_Utilities";
-#import "Tagged_Union"(DEBUG=true);
 
 #load "src/Param_Container.jai";
 #load "src/Request.jai";
@@ -49,8 +48,8 @@ main :: () {
         bind_output("body", "home");
     });
     
-    //req := make_request(method=.GET, path="/posts/111/edit");
+    req := make_request(method=.GET, path="/posts/111/edit");
     //req := make_request(method=.GET, path="/users/adam");
-    req := make_request(method=.GET, path="/");
+    //req := make_request(method=.GET, path="/");
     route_request(req);
 }
