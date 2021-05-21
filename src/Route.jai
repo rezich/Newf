@@ -17,6 +17,7 @@ notes:
     must not end with a slash (except for the path "/")
 */
 
+ROUTE_PATH_SEPARATORS :: "/.-";
 
 Route :: struct {
     response: Response_Proc;
@@ -122,14 +123,14 @@ route_matches :: (req: *Request, route: *Route) -> bool {
                 if !begins_with(str, piece.text) then return false;
                 str = slice(str, piece.text.count, str.count);
             case .PARAM_INT;
-                end_of_param, found = index_of_char(str, #char "/");
+                end_of_param, found = index_of_any_char(str, ROUTE_PATH_SEPARATORS);
                 if !found then end_of_param = str.count;
                 if end_of_param == 0 then break;
                 add_int(*params, route.params[current_param], string_to_int(slice(str, 0, end_of_param)));
                 str = slice(str, end_of_param, str.count);
                 current_param += 1;
             case .PARAM_STRING;
-                end_of_param, found = index_of_char(str, #char "/");
+                end_of_param, found = index_of_any_char(str, ROUTE_PATH_SEPARATORS);
                 if !found then end_of_param = str.count;
                 if end_of_param == 0 then break;
                 add_string(*params, route.params[current_param], slice(str, 0, end_of_param));
