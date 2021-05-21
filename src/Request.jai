@@ -13,5 +13,19 @@ Request_Method :: enum {
 Request :: struct {
     method: Request_Method;
     path: string;
-    params: [..] Any;
+    headers: Table(string, string);
+    params: Param_Container;
+}
+
+make_request :: (method: Request_Method, path: string) -> *Request {
+    req := New(Request);
+    req.method = method;
+    req.path = path;
+    init(*req.headers);
+    init(*req.params);
+    return req;
+}
+
+deinit :: (req: *Request) {
+    deinit(*req.params);
 }

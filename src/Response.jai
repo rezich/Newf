@@ -5,6 +5,7 @@ Response_Proc :: #type (req: *Request);
 Response :: struct {
     body: string;
     headers: [..] string;
+    status: int;
 }
 
 create_response :: () -> *Response {
@@ -20,7 +21,7 @@ respond :: (req: *Request, proc: Response_Proc) {
         proc(req);
         
         // Debug:
-        write_string("\n\n");
+        write_string("\n\nRESPONSE\n========\n");
         write_string(context.response.body);
         write_string("\n\n");
     }
