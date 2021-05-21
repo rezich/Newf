@@ -26,6 +26,12 @@ respond :: (req: *Request, proc: Response_Proc) {
         proc(req);
         
         // Debug:
+        write_string("\n\n\nREQUEST\n=======\n\n");
+        print("PATH\n----\n%\n", req.path);
+        write_string("\nHEADERS\n-------\n");
+        for value, key: req.headers {
+            print("%: %\n", key, value);
+        }
         write_string("\n\nRESPONSE\n========\n\n");
         print("STATUS\n------\n%\n", res.status);
         write_string("\nHEADERS\n-------\n");
