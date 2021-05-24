@@ -20,6 +20,7 @@ notes:
 ROUTE_PATH_SEPARATORS :: "/.-";
 
 Route :: struct {
+    method: Request_Method;
     response: Response_Proc;
     params: [..] string;
     pieces: [..] Route_Piece;
@@ -39,8 +40,9 @@ Route_Piece :: struct {
 
 routes: [..] Route;
 
-add_route :: (path: string, response: Response_Proc) {
+add_route :: (method: Request_Method, path: string, response: Response_Proc) {
     route: Route;
+    route.method = method;
     route.response = response;
     parse_route_path(*route, path);
     array_add(*routes, route);
@@ -104,6 +106,8 @@ parse_route_path :: (using route: *Route, path: string) {
 }
 
 route_matches :: (req: *Request, route: *Route) -> bool {
+    if req.method != route.method then return false; // yeah this route matching sure isn't very efficient is it
+
     str := req.path;
     n := 0;
     current_param := 0;

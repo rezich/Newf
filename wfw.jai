@@ -16,14 +16,14 @@ main :: () {
     set_working_directory(#filepath);
     init_template_system("/templates", ".template");
 
-    add_route("/", (req: *Request) {
+    add_route(.GET, "/", (req: *Request) {
         defer output("index");
         bind("site_title", SITE_TITLE);
         bind("page_title", "Home");
         bind_output("body", "home");
     });
 
-    add_route("/posts/:id", (req: *Request) {
+    add_route(.GET, "/posts/:id", (req: *Request) {
         defer output("index");
         bind("site_title", SITE_TITLE);
         bind("page_title", "This will be dynamic at some point");
@@ -32,7 +32,7 @@ main :: () {
         bind_output("body", "blog/post");
     });
 
-    add_route("/posts/:id/edit", (req: *Request) {
+    add_route(.GET, "/posts/:id/edit", (req: *Request) {
         defer output("index");
         post_id := get_int(*req.params, "id");
         bind("site_title", SITE_TITLE);
@@ -42,7 +42,7 @@ main :: () {
         bind_output("body", "blog/post");
     });
 
-    add_route("/users/$username", (req: *Request) {
+    add_route(.GET, "/users/$username", (req: *Request) {
         defer output("index");
         username := get_string(*req.params, "username");
         bind("site_title", SITE_TITLE);
@@ -50,7 +50,7 @@ main :: () {
         bind_output("body", "home");
     });
 
-    add_route("*", (req: *Request) {
+    add_route(.GET, "*", (req: *Request) {
         defer output("index");
         bind("site_title", SITE_TITLE);
         bind("page_title", "Page not found");
