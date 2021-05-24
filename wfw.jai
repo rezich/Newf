@@ -4,6 +4,9 @@
 #import "File";
 #import "File_Utilities";
 
+#load "modules/winsock.jai";
+
+#load "src/Middleware.jai";
 #load "src/Param_Container.jai";
 #load "src/Request.jai";
 #load "src/Response.jai";
@@ -15,6 +18,11 @@ SITE_TITLE :: "Best Website!";
 main :: () {
     set_working_directory(#filepath);
     init_template_system("/templates", ".template");
+
+    add_middleware((req: *Request, res: *Response) {
+        write_string("\n\nmiddleware test!\n\n");
+        bind("asdf", "ASDF");
+    });
 
     add_route(.GET, "/", (req: *Request, res: *Response) {
         defer output(res, "index");
@@ -59,8 +67,8 @@ main :: () {
         res.status = 404;
     });
     
-    //req := make_request(method=.GET, path="/posts/111/edit");
-    req := make_request(method=.GET, path="/posts//edit"); // should 404
+    req := make_request(method=.GET, path="/posts/111/edit");
+    //req := make_request(method=.GET, path="/posts//edit"); // should 404
     //req := make_request(method=.GET, path="/users/adam");
     //req := make_request(method=.GET, path="/users/"); // should 404
     //req := make_request(method=.GET, path="/");

@@ -1,5 +1,6 @@
 templates: Table(string, *Template);
-template_variables: Table(string, Any);
+Template_Variables :: #type Table(string, Any);
+#add_context template_variables: Template_Variables;
 
 Template :: struct {
     body: string;
@@ -8,7 +9,6 @@ Template :: struct {
 }
 
 init_template_system :: (relative_template_path: string, extension: string = ".template") {
-    init(*template_variables, 32);
     working_directory, success := get_working_directory();
     if !success {
         print("failed to get current working directory");
@@ -70,18 +70,14 @@ parse :: (input: string) -> *Template {
     return tpl;
 }
 
-reset_bindings :: () {
-    table_reset(*template_variables);
-}
-
 bind :: (variable_name: string, value: Any) {
-    table_add(*template_variables, variable_name, value);
+    table_add(*context.template_variables, variable_name, value);
 }
 
 output_string :: (using template: *Template) -> string #must {
     output_params: [..] Any;
     for param: params {
-        value, success := table_find(template_variables, param);
+        value, success := table_find(context.template_variables, param);
         array_add(*output_params, ifx success then value else tprint("!!PARAM ERROR: % !!", param));
     }
     return tprint(output_body, .. output_params);
