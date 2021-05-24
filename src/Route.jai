@@ -17,7 +17,7 @@ notes:
     must not end with a slash (except for the path "/")
 */
 
-ROUTE_PATH_SEPARATORS :: "/.-";
+ROUTE_PATH_SEPARATORS :: "/-.";
 
 Route :: struct {
     method: Request_Method;

@@ -1,6 +1,4 @@
-#add_context response: *Response = null;
-
-Response_Proc :: #type (req: *Request);
+Response_Proc :: #type (req: *Request, res: *Response);
 
 Response :: struct {
     body: string;
@@ -20,27 +18,25 @@ deinit :: (using res: *Response) {
 
 respond :: (req: *Request, proc: Response_Proc) {
     res := create_response();
-    new_context := context;
-    new_context.response = res;
-    push_context new_context {
-        proc(req);
-        
-        // Debug:
-        write_string("\n\n\nREQUEST\n=======\n\n");
-        print("PATH\n----\n%\n", req.path);
-        write_string("\nHEADERS\n-------\n");
-        for value, key: req.headers {
-            print("%: %\n", key, value);
-        }
-        write_string("\n\nRESPONSE\n========\n\n");
-        print("STATUS\n------\n%\n", res.status);
-        write_string("\nHEADERS\n-------\n");
-        for value, key: res.headers {
-            print("%: %\n", key, value);
-        }
-        write_string("\nBODY\n----\n");
-        write_string(context.response.body);
-        write_string("\n\n");
+
+    proc(req, res);
+    
+    // Debug:
+    write_string("\n\n\nREQUEST\n=======\n\n");
+    print("PATH\n----\n%\n", req.path);
+    write_string("\nHEADERS\n-------\n");
+    for value, key: req.headers {
+        print("%: %\n", key, value);
     }
+    write_string("\n\nRESPONSE\n========\n\n");
+    print("STATUS\n------\n%\n", res.status);
+    write_string("\nHEADERS\n-------\n");
+    for value, key: res.headers {
+        print("%: %\n", key, value);
+    }
+    write_string("\nBODY\n----\n");
+    write_string(res.body);
+    write_string("\n\n");
+
     deinit(res);
 }

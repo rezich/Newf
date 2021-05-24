@@ -94,8 +94,8 @@ output_string :: (template_name: string) -> string #must {
     return "---";
 }
 
-output :: (template_name: string) {
-    context.response.body = output_string(template_name);
+output :: (res: *Response, template_name: string) {
+    res.body = output_string(template_name);
 }
 
 bind_output :: inline (variable_name: string, template_name: string) {
