@@ -1,3 +1,4 @@
 .build
 *.pdb
 *.exe
+modules/jai-socket/*
