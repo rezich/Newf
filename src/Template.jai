@@ -1,16 +1,20 @@
 templates: Table(string, *Template);
-Template_Variables :: #type Table(string, Any);
-//#add_context template_variables: *Template_Variables;
-//#add_context template_test: int = 0;
+//Template_Variables :: #type Table(string, Any);
+Template_Variables :: #type Table(string, string);
 
-Template_Container :: struct {
-    
+Template_Piece :: struct {
+    type: enum {
+        TEXT;
+        PARAM;
+    }
+    text: string;
+    param_id: int;
 }
 
 Template :: struct {
     body: string;
-    output_body: string;
     params: [..] string;
+    pieces: [..] Template_Piece;
 }
 
 init_template_system :: (relative_template_path: string, extension: string = ".template") {
@@ -22,9 +26,27 @@ init_template_system :: (relative_template_path: string, extension: string = ".t
     template_path := tprint("%1%2", working_directory, relative_template_path);
     list := file_list(template_path, true);
     for list {
+        if !ends_with(it, extension) then continue;
         short_name := replace(replace(it, tprint("%/", template_path), ""), extension, "");
         contents, success := read_entire_file(it);
-        if success then table_add(*templates, short_name, parse(contents));
+        if success {
+            parsed := parse(contents);
+            /*write_string("\n\n---\n");
+            for parsed.pieces {
+                if it.type == {
+                    case .TEXT;
+                        write_string("TEXT: ");
+                        write_string(it.text);
+                        write_string("\n");
+                    case .PARAM;
+                        write_string("PARAM: ");
+                        print("% (%)", it.param_id, parsed.params[it.param_id]);
+                        write_string("\n");
+                }
+            }
+            write_string("\n---\n\n");*/
+            table_add(*templates, short_name, parsed);
+        }
         else print("failed to load template: %\n", it);
     }
 }
@@ -35,9 +57,8 @@ parse :: (input: string) -> *Template {
     str := input;
     start, end: int;
     found: bool;
-    output_builder: String_Builder;
 
-    n := 1;
+    n := 0;
     
     while true {
         start, found = index_of_string(str, "%{");
@@ -60,32 +81,51 @@ parse :: (input: string) -> *Template {
             inserting_n = n;
             n += 1;
         }
-        else {
-            inserting_n += 1;
+        
+        text_before := slice(str, 0, start);
+        if text_before.count > 0 {
+            before_text: Template_Piece;
+            before_text.type = .TEXT;
+            before_text.text = text_before;
+            array_add(*tpl.pieces, before_text);
         }
 
-        append(*output_builder, slice(str, 0, start));
-        append(*output_builder, "%");
-        append(*output_builder, tprint("%", inserting_n));
+        param: Template_Piece;
+        param.type = .PARAM;
+        param.param_id = inserting_n;
+        array_add(*tpl.pieces, param);
 
         str = slice(str, end + 1, str.count);
     }
-    append(*output_builder, slice(str, 0, str.count));
-    tpl.output_body = builder_to_string(*output_builder);
+
+    text_after := slice(str, 0, str.count);
+    if text_after.count > 0 {
+        after_text: Template_Piece;
+        after_text.type = .TEXT;
+        after_text.text = text_after;
+        array_add(*tpl.pieces, after_text);
+    }
+
     return tpl;
 }
 
-bind :: (res: *Response, variable_name: string, value: Any) {
+bind :: (res: *Response, variable_name: string, value: string) {
     table_add(*res.template_variables, variable_name, value);
 }
 
 output_string :: (res: *Response, template: *Template) -> string #must {
-    output_params: [..] Any;
-    for param: template.params {
-        value, success := table_find(res.template_variables, param);
-        array_add(*output_params, ifx success then value else tprint("!!PARAM ERROR: % !!", param));
+    output_builder: String_Builder;
+    
+    for template.pieces {
+        if it.type == {
+            case .TEXT;
+                append(*output_builder, it.text);
+            case .PARAM;
+                value, success := table_find(res.template_variables, template.params[it.param_id]);
+                append(*output_builder, ifx success then value else "!!PARAM ERROR!!");
+        }
     }
-    return tprint(template.output_body, .. output_params);
+    return builder_to_string(*output_builder);
 }
 
 output_string :: (res: *Response, template_name: string) -> string #must {
@@ -99,7 +139,7 @@ output :: (res: *Response, template_name: string) {
     res.body = output_string(res, template_name);
 }
 
-bind_output :: inline (res: *Response, variable_name: string, template_name: string) {
+bind_output :: (res: *Response, variable_name: string, template_name: string) {
     template, success := table_find(templates, template_name);
     if success then bind(res, variable_name, output_string(res, template));
     else print("failed to output template: %", template_name);

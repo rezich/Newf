@@ -1,5 +1,6 @@
 <html><head><title>%{site_title} - %{page_title}</title><head>
 <body>
 %{body}
+<div id="footer">Copyright (C) 2021 %{site_title}</div>
 </body>
 </html>
