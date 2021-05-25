@@ -4,29 +4,29 @@ Response :: struct {
     body: string;
     headers: Table(string, string);
     status: int = 200;
-    template_variables: Template_Variables;
+    sent: bool = false;
 }
 
 create_response :: () -> *Response {
     res := New(Response);
     init(*res.headers);
-    init(*res.template_variables);
     return res;
 }
 
 deinit :: (using res: *Response) {
     uninit(*headers);
-    uninit(*template_variables);
+}
+
+send :: (using res: *Response) {
+    sent = true;
 }
 
 respond :: (req: *Request, proc: Response_Proc) {
     res := create_response();
 
-    //new_context := context;
-    //context.template_variables = *res.template_variables;
-    //push_context new_context {
-
-        run_middleware(req, res);
+    new_context := context;
+    push_context new_context {
+        run_middleware_before(req, res);
 
         proc(req, res);
         
@@ -48,9 +48,13 @@ respond :: (req: *Request, proc: Response_Proc) {
         write_string("\n\n");
         
         write_string("\nTEMPLATE VARIABLES\n----\n");
-        for res.template_variables {
+        for context.template_variables {
             print("%: %\n", it_index, it);
         }
-    //}
+
+        if !res.sent then send(res);
+
+        run_middleware_after(req, res);
+    }
     deinit(res);
 }

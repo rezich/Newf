@@ -1,5 +1,6 @@
 templates: Table(string, *Template);
 Template_Variables :: #type Table(string, string);
+#add_context template_variables: Template_Variables;
 
 Template_Piece :: struct {
     type: enum {
@@ -48,6 +49,8 @@ init_template_system :: (relative_template_path: string, extension: string = ".t
         }
         else print("failed to load template: %\n", it);
     }
+    add_middleware_before(template_middleware_before);
+    add_middleware_after(template_middleware_after);
 }
 
 parse :: (input: string) -> *Template {
@@ -108,11 +111,11 @@ parse :: (input: string) -> *Template {
     return tpl;
 }
 
-bind :: (res: *Response, variable_name: string, value: Any) {
-    table_add(*res.template_variables, variable_name, tprint("%", value));
+bind :: (variable_name: string, value: Any) {
+    table_add(*context.template_variables, variable_name, tprint("%", value));
 }
 
-output_string :: (res: *Response, template: *Template) -> string #must {
+output_string :: (template: *Template) -> string #must {
     output_builder: String_Builder;
     
     for template.pieces {
@@ -120,26 +123,34 @@ output_string :: (res: *Response, template: *Template) -> string #must {
             case .TEXT;
                 append(*output_builder, it.text);
             case .PARAM;
-                value, success := table_find(res.template_variables, template.params[it.param_id]);
+                value, success := table_find(context.template_variables, template.params[it.param_id]);
                 append(*output_builder, ifx success then value else "!!PARAM ERROR!!");
         }
     }
     return builder_to_string(*output_builder);
 }
 
-output_string :: (res: *Response, template_name: string) -> string #must {
+output_string :: (template_name: string) -> string #must {
     template, success := table_find(templates, template_name);
-    if success then return output_string(res, template);
+    if success then return output_string(template);
     else print("failed to output template: %", template_name);
     return "---";
 }
 
 output :: (res: *Response, template_name: string) {
-    res.body = output_string(res, template_name);
+    res.body = output_string(template_name);
 }
 
-bind_output :: (res: *Response, variable_name: string, template_name: string) {
+bind_output :: (variable_name: string, template_name: string) {
     template, success := table_find(templates, template_name);
-    if success then bind(res, variable_name, output_string(res, template));
+    if success then bind(variable_name, output_string(template));
     else print("failed to output template: %", template_name);
+}
+
+template_middleware_before :: (req: *Request, res: *Response) {
+    init(*context.template_variables);
+}
+
+template_middleware_after :: (req: *Request, res: *Response) {
+    uninit(*context.template_variables);
 }
