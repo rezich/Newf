@@ -21,6 +21,7 @@ main :: () {
 
     add_middleware_before((req: *Request, res: *Response) {
         bind("site_title", SITE_TITLE);
+        bind("current_year", 2021);
     });
 
     add_route(.GET, "/", (req: *Request, res: *Response) {

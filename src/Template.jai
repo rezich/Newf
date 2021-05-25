@@ -31,6 +31,7 @@ init_template_system :: (relative_template_path: string, extension: string = ".t
         contents, success := read_entire_file(it);
         if success {
             parsed := parse(contents);
+            // Debug
             /*write_string("\n\n---\n");
             for parsed.pieces {
                 if it.type == {
@@ -152,5 +153,11 @@ template_middleware_before :: (req: *Request, res: *Response) {
 }
 
 template_middleware_after :: (req: *Request, res: *Response) {
+    // Debug
+    /*write_string("\nTEMPLATE VARIABLES\n----\n");
+    for context.template_variables {
+        print("%: %\n", it_index, it);
+    }*/
+
     uninit(*context.template_variables);
 }

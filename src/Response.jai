@@ -19,6 +19,17 @@ deinit :: (using res: *Response) {
 
 send :: (using res: *Response) {
     sent = true;
+
+    // Debug:
+    write_string("\n\nRESPONSE\n========\n\n");
+    print("STATUS\n------\n%\n", res.status);
+    write_string("\nHEADERS\n-------\n");
+    for value, key: res.headers {
+        print("%: %\n", key, value);
+    }
+    write_string("\nBODY\n----\n");
+    write_string(res.body);
+    write_string("\n\n");
 }
 
 respond :: (req: *Request, proc: Response_Proc) {
@@ -28,8 +39,6 @@ respond :: (req: *Request, proc: Response_Proc) {
     push_context new_context {
         run_middleware_before(req, res);
 
-        proc(req, res);
-        
         // Debug:
         write_string("\n\n\nREQUEST\n=======\n\n");
         print("PATH\n----\n%\n", req.path);
@@ -37,20 +46,8 @@ respond :: (req: *Request, proc: Response_Proc) {
         for value, key: req.headers {
             print("%: %\n", key, value);
         }
-        write_string("\n\nRESPONSE\n========\n\n");
-        print("STATUS\n------\n%\n", res.status);
-        write_string("\nHEADERS\n-------\n");
-        for value, key: res.headers {
-            print("%: %\n", key, value);
-        }
-        write_string("\nBODY\n----\n");
-        write_string(res.body);
-        write_string("\n\n");
-        
-        write_string("\nTEMPLATE VARIABLES\n----\n");
-        for context.template_variables {
-            print("%: %\n", it_index, it);
-        }
+
+        proc(req, res);
 
         if !res.sent then send(res);
 
