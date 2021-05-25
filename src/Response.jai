@@ -16,14 +16,15 @@ create_response :: () -> *Response {
 
 deinit :: (using res: *Response) {
     uninit(*headers);
+    uninit(*template_variables);
 }
 
 respond :: (req: *Request, proc: Response_Proc) {
     res := create_response();
 
-    new_context := context;
-    init(*new_context.template_variables);
-    push_context new_context {
+    //new_context := context;
+    //context.template_variables = *res.template_variables;
+    //push_context new_context {
 
         run_middleware(req, res);
 
@@ -45,8 +46,11 @@ respond :: (req: *Request, proc: Response_Proc) {
         write_string("\nBODY\n----\n");
         write_string(res.body);
         write_string("\n\n");
-
-        uninit(*context.template_variables);
-    }
+        
+        write_string("\nTEMPLATE VARIABLES\n----\n");
+        for res.template_variables {
+            print("%: %\n", it_index, it);
+        }
+    //}
     deinit(res);
 }

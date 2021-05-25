@@ -19,51 +19,52 @@ main :: () {
     set_working_directory(#filepath);
     init_template_system("/templates", ".template");
 
-    add_middleware((req: *Request, res: *Response) {
+    /*add_middleware((req: *Request, res: *Response) {
         write_string("\n\nmiddleware test!\n\n");
-        bind("asdf", "ASDF");
-    });
+        bind(res, "asdf", "ASDF");
+        bind(res, "site_title", SITE_TITLE);
+    });*/
 
     add_route(.GET, "/", (req: *Request, res: *Response) {
         defer output(res, "index");
-        bind("site_title", SITE_TITLE);
-        bind("page_title", "Home");
-        bind_output("body", "home");
+        bind(res, "site_title", SITE_TITLE);
+        bind(res, "page_title", "Home");
+        bind_output(res, "body", "home");
     });
 
     add_route(.GET, "/posts/:id", (req: *Request, res: *Response) {
         defer output(res, "index");
-        bind("site_title", SITE_TITLE);
-        bind("page_title", "This will be dynamic at some point");
-        bind("post_title", "First blog post");
-        bind("post_body", "This is a blog post!");
-        bind_output("body", "blog/post");
+        bind(res, "site_title", SITE_TITLE);
+        bind(res, "page_title", "This will be dynamic at some point");
+        bind(res, "post_title", "First blog post");
+        bind(res, "post_body", "This is a blog post!");
+        bind_output(res, "body", "blog/post");
     });
 
     add_route(.GET, "/posts/:id/edit", (req: *Request, res: *Response) {
         defer output(res, "index");
         post_id := get_int(*req.params, "id");
-        bind("site_title", SITE_TITLE);
-        bind("page_title", "Editing post");
-        bind("post_title", post_id);
-        bind("post_body", "This is a blog post!");
-        bind_output("body", "blog/post");
+        
+        bind(res, "page_title", "Editing post");
+        bind(res, "post_title", post_id);
+        bind(res, "post_body", "This is a blog post!");
+        bind_output(res, "body", "blog/post");
     });
 
     add_route(.GET, "/users/$username", (req: *Request, res: *Response) {
         defer output(res, "index");
         username := get_string(*req.params, "username");
-        bind("site_title", SITE_TITLE);
-        bind("page_title", username);
-        bind_output("body", "home");
+        bind(res, "site_title", SITE_TITLE);
+        bind(res, "page_title", username);
+        bind_output(res, "body", "home");
     });
 
     // for now, route paths are tested to match in sequence, so your wildcard routes must be last
     add_route(.GET, "*", (req: *Request, res: *Response) {
         defer output(res, "index");
-        bind("site_title", SITE_TITLE);
-        bind("page_title", "Page not found");
-        bind_output("body", "404");
+        bind(res, "site_title", SITE_TITLE);
+        bind(res, "page_title", "Page not found");
+        bind_output(res, "body", "404");
         res.status = 404;
     });
     

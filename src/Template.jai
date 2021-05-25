@@ -1,6 +1,11 @@
 templates: Table(string, *Template);
 Template_Variables :: #type Table(string, Any);
-#add_context template_variables: Template_Variables;
+//#add_context template_variables: *Template_Variables;
+//#add_context template_test: int = 0;
+
+Template_Container :: struct {
+    
+}
 
 Template :: struct {
     body: string;
@@ -70,32 +75,32 @@ parse :: (input: string) -> *Template {
     return tpl;
 }
 
-bind :: (variable_name: string, value: Any) {
-    table_add(*context.template_variables, variable_name, value);
+bind :: (res: *Response, variable_name: string, value: Any) {
+    table_add(*res.template_variables, variable_name, value);
 }
 
-output_string :: (using template: *Template) -> string #must {
+output_string :: (res: *Response, template: *Template) -> string #must {
     output_params: [..] Any;
-    for param: params {
-        value, success := table_find(context.template_variables, param);
+    for param: template.params {
+        value, success := table_find(res.template_variables, param);
         array_add(*output_params, ifx success then value else tprint("!!PARAM ERROR: % !!", param));
     }
-    return tprint(output_body, .. output_params);
+    return tprint(template.output_body, .. output_params);
 }
 
-output_string :: (template_name: string) -> string #must {
+output_string :: (res: *Response, template_name: string) -> string #must {
     template, success := table_find(templates, template_name);
-    if success then return output_string(template);
+    if success then return output_string(res, template);
     else print("failed to output template: %", template_name);
     return "---";
 }
 
 output :: (res: *Response, template_name: string) {
-    res.body = output_string(template_name);
+    res.body = output_string(res, template_name);
 }
 
-bind_output :: inline (variable_name: string, template_name: string) {
+bind_output :: inline (res: *Response, variable_name: string, template_name: string) {
     template, success := table_find(templates, template_name);
-    if success then bind(variable_name, output_string(template));
+    if success then bind(res, variable_name, output_string(res, template));
     else print("failed to output template: %", template_name);
 }

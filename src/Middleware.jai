@@ -1,14 +1,20 @@
 Middleware_Proc :: #type (req: *Request, res: *Response);
 
-middleware: [..] Middleware_Proc;
+Middleware :: struct {
+    proc: Middleware_Proc;
+}
+
+middleware: [..] Middleware;
 
 add_middleware :: inline (proc: Middleware_Proc) {
-    array_add(*middleware, proc);
+    mw: Middleware;
+    mw.proc = proc;
+    array_add(*middleware, mw);
 }
 
 run_middleware :: (req: *Request, res: *Response) {
-    for proc: middleware {
+    for mw: middleware {
         print("% %\n", req, res);
-        proc(req, res);
+        mw.proc(req, res);
     }
 }
