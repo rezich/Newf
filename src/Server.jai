@@ -16,7 +16,7 @@ create_server :: (port: u16=80) -> *Server {
     return server;
 }
 
-handle_request :: (socket: Socket) {
+handle_request :: inline (socket: Socket) {
     buffer: [BUFFER_SIZE + 1] u8;
     nbytes := recv(socket, buffer.data, BUFFER_SIZE, 0);
     if nbytes <= 0 {
@@ -48,35 +48,35 @@ handle_request :: (socket: Socket) {
 
 start :: (using server: *Server) {
     running = true;
-    listenfd, socketfd: Socket;
-    cli_addr, serv_addr: sockaddr_in = ---;
-    if WSAStartup(MAKEWORD(2,2), *wsa) != 0 {
-        print("Error!");
+    listen_socket, incoming_socket: Socket;
+    client_address, server_address: sockaddr_in = ---;
+    if WSAStartup(WINSOCK_VERSION, *wsa) != 0 {
+        log("Failed to init WinSock!");
     }
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    if listenfd < 0 {
-        print("Error!");
+    listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if listen_socket < 0 {
+        log("failed to init socket!");
     }
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(port);
-    if bind(listenfd, cast(*sockaddr) *serv_addr, size_of(type_of(serv_addr))) < 0 {
-        print("Error!");
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_address.sin_port = htons(port);
+    if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 {
+        log("Failed to bind port!");
     }
-    if listen(listenfd, 64) < 0 {
-        print("Error!");
+    if listen(listen_socket, 64) < 0 {
+        log("Failed to listen to port!");
     }
 
     length: int;
     while running {
-        length = size_of(type_of(cli_addr));
-        socketfd = accept(listenfd, cast(*sockaddr) *cli_addr, *length);
-        if socketfd < 0 {
+        length = size_of(type_of(client_address));
+        incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
+        if incoming_socket < 0 {
             print("Error!");
         }
         else {
-            handle_request(socketfd);
+            handle_request(incoming_socket);
         }
-        shutdown(socketfd, SD_BOTH);
+        shutdown(incoming_socket, SD_BOTH);
     }
 }
