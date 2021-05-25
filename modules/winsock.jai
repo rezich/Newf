@@ -54,12 +54,15 @@ WSAStartup :: (version: u16, wsaData: *WSAData) -> u32 #foreign winsock;
 WSAGetLastError :: () -> s32 #foreign winsock;
 socket :: (af: s32, type: s32, protocol: s32) -> Socket #foreign winsock;
 htons :: (hostshort: u16) -> u16 #foreign winsock;
+htonl :: (hostlong: u32) -> u32 #foreign winsock;
 bind :: (s: Socket, address: *sockaddr, namelen: int) -> s32 #foreign winsock;
 closesocket :: (s: Socket) -> s32 #foreign winsock;
 listen :: (s: Socket, backlog: int) -> s32 #foreign winsock;
 WSACleanup :: () -> s32 #foreign winsock;
 accept :: (s: Socket, addr: *sockaddr, addrlen: *int) -> Socket #foreign winsock;
 recv :: (s: Socket, data: *u8, length: s32, flags: u32) -> s32 #foreign winsock;
+shutdown :: (s: Socket, how: s32) -> s32 #foreign winsock;
+send :: (s: Socket, buf: *u8, len: s32, flags: s32) -> s32 #foreign winsock;
 
 MAKEWORD :: inline (low: u8, high: u8) -> u16 {
     result : u16 = (high << 8) | low;
@@ -87,3 +90,7 @@ SOCK_SEQPACKET :: 5;
 INVALID_SOCKET : Socket : ~0;
 SOCKET_ERROR   :: -1;
 INADDR_ANY     :: 0;
+
+SD_RECEIVE :: 0;
+SD_SEND    :: 1;
+SD_BOTH    :: 2;

@@ -17,6 +17,16 @@ Request :: struct {
     params: Param_Container;
 }
 
+request_method_from_string :: (method: string) -> Request_Method {
+    if method == {
+        case "GET";
+            return .GET;
+        case "POST";
+            return .POST;
+    }
+    return .GET; // ???
+}
+
 make_request :: (method: Request_Method, path: string) -> *Request {
     req := New(Request);
     req.method = method;

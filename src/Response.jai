@@ -21,7 +21,7 @@ send :: (using res: *Response) {
     sent = true;
 
     // Debug:
-    write_string("\n\nRESPONSE\n========\n\n");
+    /*write_string("\n\nRESPONSE\n========\n\n");
     print("STATUS\n------\n%\n", res.status);
     write_string("\nHEADERS\n-------\n");
     for value, key: res.headers {
@@ -29,10 +29,10 @@ send :: (using res: *Response) {
     }
     write_string("\nBODY\n----\n");
     write_string(res.body);
-    write_string("\n\n");
+    write_string("\n\n");*/
 }
 
-respond :: (req: *Request, proc: Response_Proc) {
+respond :: (req: *Request, proc: Response_Proc) -> *Response {
     res := create_response();
 
     new_context := context;
@@ -49,9 +49,9 @@ respond :: (req: *Request, proc: Response_Proc) {
 
         proc(req, res);
 
-        if !res.sent then send(res);
+        //if !res.sent then send(res);
 
         run_middleware_after(req, res);
     }
-    deinit(res);
+    return res;
 }

@@ -4,13 +4,12 @@
 #import "File";
 #import "File_Utilities";
 
-#load "modules/winsock.jai";
-
 #load "src/Middleware.jai";
 #load "src/Param_Container.jai";
 #load "src/Request.jai";
 #load "src/Response.jai";
 #load "src/Route.jai";
+#load "src/Server.jai";
 #load "src/Template.jai";
 
 SITE_TITLE :: "Best Website!";
@@ -30,25 +29,25 @@ main :: () {
         bind_output("body", "home");
     });
 
-    add_route(.GET, "/posts/:id", (req: *Request, res: *Response) {
+    add_route(.GET, "/post/:id", (req: *Request, res: *Response) {
         defer output(res, "index");
+        post_id := get_int(*req.params, "id");
         bind("page_title", "This will be dynamic at some point");
-        bind("post_title", "First blog post");
+        bind("post_title", post_id);
         bind("post_body", "This is a blog post!");
         bind_output("body", "blog/post");
     });
 
-    add_route(.GET, "/posts/:id/edit", (req: *Request, res: *Response) {
+    add_route(.GET, "/post/:id/edit", (req: *Request, res: *Response) {
         defer output(res, "index");
         post_id := get_int(*req.params, "id");
-        
         bind("page_title", "Editing post");
         bind("post_title", post_id);
         bind("post_body", "This is a blog post!");
         bind_output("body", "blog/post");
     });
 
-    add_route(.GET, "/users/$username", (req: *Request, res: *Response) {
+    add_route(.GET, "/user/$username", (req: *Request, res: *Response) {
         defer output(res, "index");
         username := get_string(*req.params, "username");
         bind("page_title", username);
@@ -63,10 +62,13 @@ main :: () {
         res.status = 404;
     });
     
-    req := make_request(method=.GET, path="/posts/111/edit");
-    //req := make_request(method=.GET, path="/posts//edit"); // should 404
-    //req := make_request(method=.GET, path="/users/adam");
-    //req := make_request(method=.GET, path="/users/"); // should 404
+    //req := make_request(method=.GET, path="/post/111/edit");
+    //req := make_request(method=.GET, path="/post//edit"); // should 404
+    //req := make_request(method=.GET, path="/user/adam");
+    //req := make_request(method=.GET, path="/user/"); // should 404
     //req := make_request(method=.GET, path="/");
-    route_request(req);
+    //route_request(req);
+
+    server := create_server(8000);
+    start(server);
 }

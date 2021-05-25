@@ -48,17 +48,16 @@ add_route :: (method: Request_Method, path: string, response: Response_Proc) {
     array_add(*routes, route);
 }
 
-route_request :: (req: *Request) {
+route_request :: (req: *Request) -> *Response {
     found := false;
     for * route: routes {
         if route_matches(req, route) {
-            respond(req, route.response);
-            found = true;
-            break;
+            return respond(req, route.response);
         }
     }
     if !found then print("Route not found!! %", req.path);
-    deinit(req);
+    return null;
+    //deinit(req);
 }
 
 parse_route_path :: (using route: *Route, path: string) {
