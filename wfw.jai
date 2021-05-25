@@ -24,9 +24,9 @@ main :: () {
     });
 
     add_route(.GET, "/", (req: *Request, res: *Response) {
+        defer output(res, "index");
         bind(res, "page_title", "Home");
         bind_output(res, "body", "home");
-        output(res, "index");
     });
 
     add_route(.GET, "/posts/:id", (req: *Request, res: *Response) {
@@ -37,7 +37,7 @@ main :: () {
         bind_output(res, "body", "blog/post");
     });
 
-    /*add_route(.GET, "/posts/:id/edit", (req: *Request, res: *Response) {
+    add_route(.GET, "/posts/:id/edit", (req: *Request, res: *Response) {
         defer output(res, "index");
         post_id := get_int(*req.params, "id");
         
@@ -45,7 +45,7 @@ main :: () {
         bind(res, "post_title", post_id);
         bind(res, "post_body", "This is a blog post!");
         bind_output(res, "body", "blog/post");
-    });*/
+    });
 
     add_route(.GET, "/users/$username", (req: *Request, res: *Response) {
         defer output(res, "index");
@@ -62,10 +62,10 @@ main :: () {
         res.status = 404;
     });
     
-    //req := make_request(method=.GET, path="/posts/111/edit");
+    req := make_request(method=.GET, path="/posts/111/edit");
     //req := make_request(method=.GET, path="/posts//edit"); // should 404
     //req := make_request(method=.GET, path="/users/adam");
     //req := make_request(method=.GET, path="/users/"); // should 404
-    req := make_request(method=.GET, path="/");
+    //req := make_request(method=.GET, path="/");
     route_request(req);
 }

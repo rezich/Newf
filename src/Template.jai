@@ -1,5 +1,4 @@
 templates: Table(string, *Template);
-//Template_Variables :: #type Table(string, Any);
 Template_Variables :: #type Table(string, string);
 
 Template_Piece :: struct {
@@ -109,8 +108,8 @@ parse :: (input: string) -> *Template {
     return tpl;
 }
 
-bind :: (res: *Response, variable_name: string, value: string) {
-    table_add(*res.template_variables, variable_name, value);
+bind :: (res: *Response, variable_name: string, value: Any) {
+    table_add(*res.template_variables, variable_name, tprint("%", value));
 }
 
 output_string :: (res: *Response, template: *Template) -> string #must {
