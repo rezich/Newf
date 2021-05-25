@@ -23,6 +23,10 @@ main :: () {
         bind("current_year", 2021);
     });
 
+    add_middleware_after((req: *Request, res: *Response) {
+        sleep_milliseconds(4000); // worst middleware ever
+    });
+
     add_route(.GET, "/", (req: *Request, res: *Response) {
         defer output(res, "index");
         bind("page_title", "Home");
