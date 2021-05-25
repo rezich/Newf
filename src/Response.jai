@@ -7,6 +7,19 @@ Response :: struct {
     sent: bool = false;
 }
 
+http_status_to_string :: (status: int) -> string {
+    if status == {
+        case 200; return "OK";
+        case 400; return "Bad Request";
+        case 401; return "Unauthorized";
+        case 403; return "Forbidden";
+        case 404; return "Not Found";
+        case 405; return "Method Not Allowed";
+        case 418; return "I'm a teapot";
+    }
+    return "ERROR"; // ???
+}
+
 create_response :: () -> *Response {
     res := New(Response);
     init(*res.headers);

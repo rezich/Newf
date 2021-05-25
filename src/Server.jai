@@ -59,7 +59,7 @@ handle_request :: (socket: Socket) {
     for 0..BUFSIZE {
         buffer[it] = 0;
     }
-    response := tprint("HTTP/1.0 200 OK\r\n%\r\n\r\n%", make_header_string(res), res.body);
+    response := tprint("HTTP/1.0 % %\r\n%\r\n\r\n%", res.status, http_status_to_string(res.status), make_header_string(res), res.body);
     memcpy(buffer.data, response.data, response.count);
     buffer[response.count] = 0;
     send(socket, buffer.data, cast(s32) response.count, 0);
