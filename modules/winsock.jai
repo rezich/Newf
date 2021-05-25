@@ -1,6 +1,6 @@
-#import "Basic";
+// credit: onelivesleft
 
-PORT :: 49124;
+#import "Basic";
 
 winsock :: #foreign_system_library "ws2_32";
 

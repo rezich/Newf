@@ -74,7 +74,9 @@ start :: (using server: *Server) {
         if socketfd < 0 {
             print("Error!");
         }
-        handle_request(socketfd);
+        else {
+            handle_request(socketfd);
+        }
         shutdown(socketfd, SD_BOTH);
     }
 }

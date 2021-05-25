@@ -9,11 +9,14 @@ for a demo, run `jai wfw.jai;.\wfw.exe`, then try the following in your browser:
  - http://localhost:8000/post/108/edit
  - http://localhost:8000/user/adam
 
+Windows only for now!
+
 ----
 
 ## Features
- - templates (simple)
  - routing (with parameters!)
+ - middleware system
+ - simple template system (implemented as middleware!)
  - HTTP server (simple, unthreaded, terrible!)
 
 ## TODO
@@ -22,3 +25,4 @@ for a demo, run `jai wfw.jai;.\wfw.exe`, then try the following in your browser:
  - improve stuff
  - encapsulate everything in module/file scopes
  - make sample website
+ - UNIX (???)
