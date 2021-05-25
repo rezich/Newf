@@ -81,3 +81,7 @@ respond :: (req: *Request, proc: Response_Proc) -> *Response {
     }
     return res;
 }
+
+get_http_response_string :: inline (using res: *Response) -> string {
+    return tprint("HTTP/1.0 % %\r\n%\r\n\r\n%", status, http_status_to_string(status), make_header_string(res), body);
+}
