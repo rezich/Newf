@@ -57,7 +57,6 @@ route_request :: (req: *Request) -> *Response {
     }
     if !found then print("Route not found!! %", req.path);
     return null;
-    //deinit(req);
 }
 
 parse_route_path :: (using route: *Route, path: string) {

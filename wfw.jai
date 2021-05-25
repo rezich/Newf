@@ -61,13 +61,6 @@ main :: () {
         bind_output("body", "404");
         res.status = 404;
     });
-    
-    //req := make_request(method=.GET, path="/post/111/edit");
-    //req := make_request(method=.GET, path="/post//edit"); // should 404
-    //req := make_request(method=.GET, path="/user/adam");
-    //req := make_request(method=.GET, path="/user/"); // should 404
-    //req := make_request(method=.GET, path="/");
-    //route_request(req);
 
     server := create_server(8000);
     start(server);

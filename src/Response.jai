@@ -32,6 +32,18 @@ send :: (using res: *Response) {
     write_string("\n\n");*/
 }
 
+set_header :: (using res: *Response, key: string, value: Any) {
+    table_add(*headers, key, tprint("%", value));
+}
+
+make_header_string :: (using res: *Response) -> string {
+    builder: String_Builder;
+    for headers {
+        append(*builder, tprint("%: %\r\n", it_index, it));
+    }
+    return builder_to_string(*builder);
+}
+
 respond :: (req: *Request, proc: Response_Proc) -> *Response {
     res := create_response();
 
@@ -41,10 +53,11 @@ respond :: (req: *Request, proc: Response_Proc) -> *Response {
 
         // Debug:
         write_string("\n\n\nREQUEST\n=======\n\n");
-        print("PATH\n----\n%\n", req.path);
-        write_string("\nHEADERS\n-------\n");
+        print("METHOD\n------\n %\n\n", req.method);
+        print("PATH\n----\n %\n\n", req.path);
+        write_string("HEADERS\n-------\n");
         for value, key: req.headers {
-            print("%: %\n", key, value);
+            print(" %: %\n", key, value);
         }
 
         proc(req, res);
