@@ -139,7 +139,7 @@ output_string :: (template_name: string) -> string #must {
 }
 
 output :: (res: *Response, template_name: string) {
-    set_header(res, "Content-Type", "text/html");
+    set_header(res, "Content-Type", "text/html; charset=utf-8");
     res.body = output_string(template_name);
 }
 

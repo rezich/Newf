@@ -2,7 +2,7 @@
 
 // this needs serious refactoring but hey it works
 
-BUFFER_SIZE :: 8096;
+BUFFER_SIZE :: 65536;
 
 Server :: struct {
     port: u16;
