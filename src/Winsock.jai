@@ -63,6 +63,7 @@ accept :: (s: Socket, addr: *sockaddr, addrlen: *int) -> Socket #foreign winsock
 recv :: (s: Socket, data: *u8, length: s32, flags: u32) -> s32 #foreign winsock;
 shutdown :: (s: Socket, how: s32) -> s32 #foreign winsock;
 send :: (s: Socket, buf: *u8, len: s32, flags: s32) -> s32 #foreign winsock;
+ioctlsocket :: (s: Socket, cmd: s32, argp: *u32) -> int #foreign winsock;
 
 MAKEWORD :: inline (low: u8, high: u8) -> u16 {
     result : u16 = (high << 8) | low;
@@ -71,6 +72,11 @@ MAKEWORD :: inline (low: u8, high: u8) -> u16 {
 
 
 WINSOCK_VERSION :: #run MAKEWORD(2, 2);
+
+IOCPARM_MASK :: 0x7f;
+IOC_IN :: 0x80000000;
+_IOW :: (x,y,t) => (IOC_IN|((cast(s32)size_of(type_of(t))&IOCPARM_MASK)<<16)|((x)<<8)|(y));
+FIONBIO :: #run  _IOW(#char "f", 126, u32);
 
 AF_UNSPEC    ::  0;
 AF_INET      ::  2;

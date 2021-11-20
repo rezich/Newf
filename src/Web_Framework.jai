@@ -73,14 +73,6 @@ http_status_to_string :: (status: int) -> string {
 get_http_response_string :: inline (using res: *Response) -> string {
     return tprint("HTTP/1.0 % %\r\n%\r\n%", status, http_status_to_string(status), make_header_string(res), body);
 }
-respond :: (req: *Request, res: *Response, proc: Response_Proc) {
-    new_context := context;
-    push_context new_context {
-        for before_plugins it(req, res);
-        proc(req, res);
-        for < after_plugins it(req, res);
-    }
-}
 //------------------------------------------------------------------------------
 // Plugin
 Plugin_Proc :: #type (req: *Request, res: *Response);
@@ -103,6 +95,19 @@ ROUTE_PATH_SEPARATORS :: "/-.";
 Route :: struct {
     method: Request_Method;
     response: Response_Proc;
+    stretches: [..] Stretch;
+    params: [..] string;
+
+    Stretch :: struct {
+        type: Type;
+        text: string;
+
+        Type :: enum {
+            WILDCARD;
+            PATH;
+            PARAM;
+        }
+    }
 }
 
 routes: [..] Route;
@@ -111,7 +116,62 @@ route :: (method: Request_Method, path: string, response: Response_Proc) {
     r: Route;
     r.method = method;
     r.response = response;
+    parse_route_path(*r, path);
+
+    for r.stretches print("S: % | %\n", it.type, it.text);
+
     array_add(*routes, r);
+
+    parse_route_path :: (r: *Route, path: string) {
+        if path == "*" {
+            s: Route.Stretch;
+            s.type = .WILDCARD;
+            array_add(*r.stretches, s);
+            return;
+        }
+        if !begins_with(path, "/") {
+            print("Route error, path must begin with a forward slash\n");
+            return;
+        }
+        if ends_with(path, "/") && path.count > 1 {
+            print("Route error, path must not end with forward slash\n");
+            return;
+        }
+
+        str := path;
+        end, next_param_start, next_param_end: int;
+        found: bool;
+
+        while str != "" {
+            next_param_start := find_index_from_left(str, ":$");
+            if next_param_start == 0 {
+                next_param_end := find_index_from_left(str, #char "/");
+                end = ifx next_param_end != -1 then next_param_end else str.count;
+                new_param := slice(str, 1, end - 1);
+                s: Route.Stretch;
+                if !begins_with(str, ":") || !begins_with(str, "$") {
+                    print("Rout error, invalid param specifier\n");
+                    return;
+                }
+                s.type = Route.Stretch.Type.PARAM;
+                array_add(*r.stretches, s);
+                array_add(*r.params, new_param);
+                str = slice(str, end, str.count);
+            }
+            else {
+                end = ifx next_param_start != -1 then next_param_start else str.count;
+                s: Route.Stretch;
+                s.type = .PATH;
+                s.text = slice(str, 0, end);
+                array_add(*r.stretches, s);
+                str = slice(str, end, str.count);
+            }
+        }
+    }
+}
+param :: (key: string) -> string #expand {
+    val, success := table_find(`req.params, key);
+    if success then return val; else return "--ERROR--";
 }
 //------------------------------------------------------------------------------
 // Server
@@ -120,7 +180,7 @@ BUFFER_SIZE :: 65536;
 Server :: struct {
     port: u16;
     wsa: WSAData;
-    running: bool = false;
+    running: bool;
 }
 
 create_server :: (port: u16=80) -> *Server {
@@ -153,27 +213,17 @@ start :: (using server: *Server) {
     while running {
         length = size_of(type_of(client_address));
         incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
-        if incoming_socket < 0 {
-            print("Error!");
-        }
-        else {
-            handle_request(incoming_socket);
-        }
-        shutdown(incoming_socket, SD_BOTH);
+        defer shutdown(incoming_socket, SD_BOTH);
+        if incoming_socket < 0 then print("Error!");
+        else handle_request(incoming_socket);
     }
 
     handle_request :: inline (socket: Socket) {
         buffer: [BUFFER_SIZE + 1] u8;
         nbytes := recv(socket, buffer.data, BUFFER_SIZE, 0);
-        if nbytes <= 0 {
-            print("Error! 0 bytes");
-        }
-        if nbytes > 0 && nbytes < BUFFER_SIZE {
-            buffer[nbytes] = 0;
-        }
-        else {
-            buffer[0] = 0;
-        }
+        if nbytes <= 0 return;
+        if nbytes > 0 && nbytes < BUFFER_SIZE then buffer[nbytes] = 0;
+        else buffer[0] = 0;
 
         // parse request
         req: Request;
@@ -202,30 +252,32 @@ start :: (using server: *Server) {
         res: Response;
         defer uninit(*res);
         proc: Response_Proc;
-        
+
+        //TODO: routing
         for routes {
+            table_set(*req.params, "id", "108");
             proc = it.response;
             break;
         }
 
-        respond(*req, *res, proc);
+        for before_plugins it(*req, *res);
+        proc(*req, *res);
+        for < after_plugins it(*req, *res);
 
-
-
-
-
-        //req := make_request(buffer_string);
-        //res := route_request(req);
-
-        for 0..BUFFER_SIZE {
-            buffer[it] = 0;
-        }
+        for 0..BUFFER_SIZE buffer[it] = 0;
 
         response := get_http_response_string(*res);
         memcpy(buffer.data, response.data, response.count);
         buffer[response.count] = 0;
         send(socket, buffer.data, cast(s32) response.count, 0);
     }
+}
+//------------------------------------------------------------------------------
+xprint :: (args: ..Any) -> string {
+    builder: String_Builder;
+    defer free_buffers(*builder);
+    for args print_to_builder(*builder, tprint("%", it));
+    return builder_to_string(*builder);
 }
 //------------------------------------------------------------------------------
 #load "Winsock.jai";
