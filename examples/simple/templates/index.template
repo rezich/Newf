@@ -1,5 +1,6 @@
-<html><head><title>%{site_title} - %{page_title}</title></head>
+<html><head><title>%{site_title} — %{page_title}</title></head>
 <body>
+<h1><a href="/">Website</a> — %{page_title}</h1>
 %{body}
 <div id="footer">Copyright (C) %{current_year} %{site_title}</div>
 </body>
