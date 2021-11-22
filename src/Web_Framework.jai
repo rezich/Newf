@@ -230,7 +230,7 @@ start :: (using server: *Server) {
         defer uninit(*req);
         req_string := to_string(buffer.data);
         method_end := find_index_from_left(req_string, " ");
-        if !method_end return;
+        if method_end < 0 return;
         if slice(req_string, 0, method_end) == {
             case "GET"; req.uri.method = .GET;
             case "POST"; req.uri.method = .POST;
@@ -238,16 +238,18 @@ start :: (using server: *Server) {
         }
         req_string = slice(req_string, method_end + 1, req_string.count);
         path_end := find_index_from_left(req_string, " ");
-        if !path_end return;
+        if path_end < 0 return;
         req.uri.path = slice(req_string, 0, path_end);
         req_string = slice(req_string, path_end + 1, req_string.count);
         http_end := find_index_from_left(req_string, "\r\n");
-        if !http_end return;
+        if http_end < 0 return;
         req_string = slice(req_string, http_end, req_string.count);
         for split(req_string, "\r\n") {
             kv := split(it, ": ");
             if kv.count == 2 table_add(*req.uri.headers, kv[0], kv[1]);
         }
+
+        print("%\n", req);
 
         res: Response;
         defer uninit(*res);
@@ -273,6 +275,140 @@ start :: (using server: *Server) {
     }
 }
 //------------------------------------------------------------------------------
+// Template
+Template_Piece :: struct {
+    type: enum {
+        TEXT;
+        PARAM;
+    }
+    text: string;
+    param_id: int;
+}
+Template :: struct {
+    body: string;
+    params: [..] string;
+    pieces: [..] Template_Piece;
+}
+Template_Variables :: #type Table(string, string);
+
+templates: Table(string, *Template);
+
+init_template_system :: (relative_template_path: string = "/templates", extension: string = ".template") {
+    working_directory := get_working_directory();
+    template_path := tprint("%1%2", working_directory, relative_template_path);
+    list := file_list(template_path, true);
+    for list {
+        if !ends_with(it, extension) then continue;
+        short_name := replace(replace(it, tprint("%/", template_path), ""), extension, "");
+        contents, success := read_entire_file(it);
+        if success {
+            parsed := parse(contents);
+            // Debug
+            /*write_string("\n\n---\n");
+            for parsed.pieces {
+                if it.type == {
+                    case .TEXT;
+                        write_string("TEXT: ");
+                        write_string(it.text);
+                        write_string("\n");
+                    case .PARAM;
+                        write_string("PARAM: ");
+                        print("% (%)", it.param_id, parsed.params[it.param_id]);
+                        write_string("\n");
+                }
+            }
+            write_string("\n---\n\n");*/
+            table_add(*templates, short_name, parsed);
+        }
+        else print("failed to load template: %\n", it);
+    }
+
+    parse :: (input: string) -> *Template {
+        tpl := New(Template);
+
+        str := input;
+        found: bool;
+
+        n := 0;
+        
+        while true {
+            start := find_index_from_left(str, "%{");
+            if start < 0 break;
+
+            end := find_index_from_left(str, "}");
+            if end < 0 break;
+
+            if end < start {
+                print("ERROR PARSING TEMPLATE!\n");
+                break;
+            }
+
+            new_param := slice(str, start + 2, end - start - 2);
+            
+            inserting_n: int;
+            found, inserting_n = array_find(tpl.params, new_param);
+            if !found {
+                array_add(*tpl.params, new_param);
+                inserting_n = n;
+                n += 1;
+            }
+            
+            text_before := slice(str, 0, start);
+            if text_before.count > 0 {
+                before_text: Template_Piece;
+                before_text.type = .TEXT;
+                before_text.text = text_before;
+                array_add(*tpl.pieces, before_text);
+            }
+
+            param: Template_Piece;
+            param.type = .PARAM;
+            param.param_id = inserting_n;
+            array_add(*tpl.pieces, param);
+
+            str = slice(str, end + 1, str.count);
+        }
+
+        text_after := slice(str, 0, str.count);
+        if text_after.count > 0 {
+            after_text: Template_Piece;
+            after_text.type = .TEXT;
+            after_text.text = text_after;
+            array_add(*tpl.pieces, after_text);
+        }
+
+        return tpl;
+    }
+}
+render :: (template_name: string) #expand {
+    set_header(`res, "Content-Type", "text/html; charset=utf-8");
+    `res.body = render_to_string(`req, template_name);
+}
+render_to_string :: (req: *Request, template_name: string) -> string #must {
+    template, success := table_find(templates, template_name);
+    if !success {
+        print("failed to render template: %", template_name);
+    }
+    output_builder: String_Builder;
+    
+    for template.pieces {
+        if it.type == {
+            case .TEXT;
+                append(*output_builder, it.text);
+            case .PARAM;
+                value, success := table_find(req.params, template.params[it.param_id]);
+                append(*output_builder, ifx success then value else "!!PARAM ERROR!!");
+        }
+    }
+    return builder_to_string(*output_builder);
+}
+set :: (key: string, value: Any) #expand {
+    table_set(*`req.params, key, tprint("%", value));
+}
+set_from_render :: (key: string, template_name: string) #expand {
+    table_set(*`req.params, key, render_to_string(`req, template_name));
+}
+//------------------------------------------------------------------------------
 xprint :: (args: ..Any) -> string {
     builder: String_Builder;
     defer free_buffers(*builder);
@@ -282,6 +418,8 @@ xprint :: (args: ..Any) -> string {
 //------------------------------------------------------------------------------
 #load "Winsock.jai";
 
+#import "File_Utilities";
+#import "File";
 #import "Hash_Table";
 #import "String";
 #import "Basic";
