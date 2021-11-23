@@ -1,1 +1,1 @@
-{ "id": %{id}, "body": "%{post_body}" }
+{ "post_count": %{post_count} }

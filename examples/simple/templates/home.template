@@ -1,11 +1,9 @@
 <p>This is the main page of the website</p>
 
 <h2>Guestbook</h2>
-<fieldset><legend>Add post</legend>
-    <form action="/guestbook/post" method="post">
-        <input name="post_body" />
-        <input type="submit" value="Submit" />
-    </form>
-</fieldset>
+<form action="/guestbook/post" method="post">
+    <input name="post_body" />
+    <input type="submit" value="Add post" />
+</form>
 %{guestbook_posts}
 

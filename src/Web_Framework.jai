@@ -24,7 +24,6 @@ Request :: struct {
         subdomain: string;
     }
     params: Table(string, string);
-    form_data: Table(string, string);
 }
 
 uninit :: (using req: *Request) {
@@ -33,10 +32,8 @@ uninit :: (using req: *Request) {
 }
 request_method_from_string :: inline (method: string) -> Request_Method {
     if method == {
-        case "GET";
-            return .GET;
-        case "POST";
-            return .POST;
+        case "GET";  return .GET;
+        case "POST"; return .POST;
     }
     return .GET; // ???
 }
@@ -48,7 +45,6 @@ HTTP_Content_Type :: enum {
     HTML;
     JSON;
 }
-
 Response :: struct {
     headers: Headers;
     body: string;
@@ -59,27 +55,69 @@ uninit :: (using res: *Response) { uninit(*headers); }
 Set_Header :: (key: string, value: Any) #expand {
     table_set(*`res.headers, key, tprint("%", value));
 }
-make_header_string :: (using res: *Response) -> string {
-    builder: String_Builder;
-    for headers {
-        append(*builder, tprint("%: %\r\n", it_index, it));
-    }
-    return builder_to_string(*builder);
-}
-http_status_to_string :: (status: HTTP_Status) -> string {
-    if status == {
-        case 200; return "OK";
-        case 400; return "Bad Request";
-        case 401; return "Unauthorized";
-        case 403; return "Forbidden";
-        case 404; return "Not Found";
-        case 405; return "Method Not Allowed";
-        case 418; return "I'm a teapot";
-    }
-    return "ERROR"; // ???
-}
 get_http_response_string :: inline (using res: *Response) -> string {
-    return tprint("HTTP/1.0 % %\r\n%\r\n%", status, http_status_to_string(status), make_header_string(res), body);
+    header_string: string;
+    {
+        builder: String_Builder;
+        defer free_buffers(*builder);
+        for headers append(*builder, tprint("%: %\r\n", it_index, it));
+        header_string = builder_to_string(*builder);
+    }
+    return tprint("HTTP/1.0 % %\r\n%\r\n%", status, http_status_to_string(status), header_string, body);
+
+    http_status_to_string :: (status: HTTP_Status) -> string {
+        if status == {
+            case 100; return "Continue";
+            case 101; return "Switching Protocols";
+            case 103; return "Early Hints";
+            case 200; return "OK";
+            case 201; return "Created";
+            case 202; return "Accepted";
+            case 204; return "No Content";
+            case 205; return "Reset Content";
+            case 206; return "Partial Content";
+            case 300; return "Multiple Choice";
+            case 301; return "Moved Permanently";
+            case 302; return "Found";
+            case 303; return "See Other";
+            case 304; return "Not Modified";
+            case 307; return "Temporary Redirect";
+            case 308; return "Permanent Redirect";
+            case 400; return "Bad Request";
+            case 401; return "Unauthorized";
+            case 403; return "Forbidden";
+            case 404; return "Not Found";
+            case 405; return "Method Not Allowed";
+            case 406; return "Not Acceptable";
+            case 408; return "Request Timeout";
+            case 409; return "Conflict";
+            case 410; return "Gone";
+            case 411; return "Length Required";
+            case 412; return "Precondition Failed";
+            case 413; return "Payload Too Large";
+            case 414; return "URI Too Long";
+            case 415; return "Unsupported Media Type";
+            case 416; return "Range Not Satisfiable";
+            case 417; return "Expectation Failed";
+            case 418; return "I'm a teapot";
+            case 421; return "Misdirected Request";
+            case 426; return "Upgrade Required";
+            case 428; return "Precondition Required";
+            case 429; return "Too Many Requests";
+            case 431; return "Request Header Fields Too Large";
+            case 451; return "Unavailable For Legal Reasons";
+            case 500; return "Internal Server Error";
+            case 501; return "Not Implemented";
+            case 502; return "Bad Gateway";
+            case 503; return "Service Unavailable";
+            case 504; return "Gateway Timeout";
+            case 505; return "HTTP Version Not Supported";
+            case 506; return "Variant Also Negotiates";
+            case 510; return "Not Extended";
+            case 511; return "Network Authentication Required";
+        }
+        return "";
+    }
 }
 //------------------------------------------------------------------------------
 // Plugin
@@ -98,7 +136,7 @@ after_route :: inline (proc: After_Plugin_Proc) {
 }
 //------------------------------------------------------------------------------
 // Route
-ROUTE_PATH_SEPARATORS :: "/-.";
+ROUTE_PATH_SEPARATORS :: "/";
 
 Route :: struct {
     method: Request_Method;
@@ -130,9 +168,6 @@ route :: (method: Request_Method, subdomain: string, path: string, response: Res
     r.subdomain = subdomain;
     r.response = response;
     parse_route_path(*r, path);
-
-    //for r.stretches print("S: % | %\n", it.type, it.text);
-    //print("---\n");
 
     array_add(*routes, r);
 
@@ -183,12 +218,12 @@ route :: (method: Request_Method, subdomain: string, path: string, response: Res
         }
     }
 }
-Param :: (key: string) -> value: string = "", success: bool = true #must #expand {
+Get :: (key: string) -> value: string = "", success: bool = true #must #expand {
     value, success := table_find(`req.params, key);
     if !success return success = false;
     return value;
 }
-Param_int :: (key: string) -> value: int = -1, success: bool = true #must #expand{
+Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand{
     string_value, key_success := table_find(`req.params, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
@@ -214,22 +249,14 @@ start :: (using server: *Server) {
     running = true;
     listen_socket, incoming_socket: Socket;
     client_address, server_address: sockaddr_in = ---;
-    if WSAStartup(WINSOCK_VERSION, *wsa) != 0 {
-        log("Failed to init WinSock!");
-    }
+    if WSAStartup(WINSOCK_VERSION, *wsa) != 0 log("Failed to init WinSock!");
     listen_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if listen_socket < 0 {
-        log("failed to init socket!");
-    }
+    if listen_socket < 0 log("failed to init socket!");
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(port);
-    if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 {
-        log("Failed to bind port!");
-    }
-    if listen(listen_socket, 64) < 0 {
-        log("Failed to listen to port!");
-    }
+    if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 log("Failed to bind port!");
+    if listen(listen_socket, 64) < 0 log("Failed to listen to port!");
 
     length: int;
     while running {
@@ -251,7 +278,7 @@ start :: (using server: *Server) {
         req: Request;
         defer uninit(*req);
         req_string := to_string(buffer.data);
-        print("%\n^^^\n", req_string);
+        print("%\n", req_string);
         method_end := find_index_from_left(req_string, " ");
         if method_end < 0 return;
         if slice(req_string, 0, method_end) == {
@@ -279,13 +306,9 @@ start :: (using server: *Server) {
             }
             else {
                 kv = split(it, "=");
-                if kv.count == 2 {
-                    Set(decode_form(kv[0]), decode_form(kv[1]));
-                }
+                if kv.count == 2 Set(decode_form(kv[0]), decode_form(kv[1]));
             }
         }
-        // set builtin params
-        Set("HOSTNAME", HOSTNAME);
 
         res: Response;
         defer uninit(*res);
@@ -301,7 +324,6 @@ start :: (using server: *Server) {
             path_without_query_string = slice(req.uri.path, 0, query_string_begin);
             query_string := decode_url(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
             req.uri.query = query_string;
-            print("QUERY STRING: %\n", query_string);
             for split(query_string, "&") {
                 second: *string;
                 kv := split(it, "=");
@@ -312,12 +334,8 @@ start :: (using server: *Server) {
                 table_set(*req.uri.query_params, kv[0], <<second);
                 Set(kv[0], <<second);
             }
-            //for req.uri.query_params print("%: %\n", it_index, it);
-            //print("--\n");
-            //for req.params print("%: %\n", it_index, it);
         }
         else path_without_query_string = req.uri.path;
-        //print("\n%\n", path_without_query_string);
 
         // routing
         for route: routes {
@@ -347,7 +365,6 @@ start :: (using server: *Server) {
                 }
             }
             if str == "" && n == route.stretches.count {
-                table_set(*req.params, "id", "108");
                 for param, param_index: params {
                     table_set(*req.params, param_index, param);
                 }
@@ -356,9 +373,12 @@ start :: (using server: *Server) {
             }
         }
 
+        // set builtin params
+        Set("HOSTNAME", HOSTNAME);
+
         for before_plugins it(*req, *res);
         if proc then proc(*req, *res); else print("No proc...?\n");
-        for < after_plugins it(*req, *res);
+        for after_plugins it(*req, *res);
 
         for 0..BUFFER_SIZE buffer[it] = 0;
 
@@ -366,6 +386,7 @@ start :: (using server: *Server) {
         memcpy(buffer.data, response.data, response.count);
         buffer[response.count] = 0;
         send(socket, buffer.data, cast(s32) response.count, 0);
+        reset_temporary_storage();
     }
 }
 //------------------------------------------------------------------------------
@@ -383,7 +404,6 @@ Template :: struct {
     params: [..] string;
     pieces: [..] Template_Piece;
 }
-Template_Variables :: #type Table(string, string);
 
 templates: Table(string, Template);
 
@@ -465,9 +485,16 @@ init_template_system :: (relative_template_path: string = "/templates", extensio
         else print("failed to load template: %\n", it);
     }
 }
-Respond :: (status: HTTP_Status, body: string = "") #expand {
-    `res.status = status;
-    `res.body = body;
+Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
+    content_type_string: string;
+    if content_type == {
+        case .HTML; content_type_string = "text/html; charset=utf-8";
+        case .JSON; content_type_string = "text/json; charset=utf-8";
+    }
+    res := `res;
+    Set_Header("Content-Type", content_type_string);
+    res.body = body;
+    res.status = 200;
     `return;
 }
 Redirect :: (to: string) #expand {
@@ -482,33 +509,31 @@ Redirect_To_Hostname :: () #expand {
     Set_Header("Location", HOSTNAME);
     `return;
 }
-Tpl :: (template_name: string, args: ..Any) -> string #must #expand {
+Render :: (template_name: string, args: ..Any) -> string #must #expand {
     template, template_exists := get_template(template_name);
     if !template_exists return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
     if args.count > 0 && args.count != template.params.count {
-        return tprint("-- Tpl ARGUMENT ERROR: % --", template_name);
+        return tprint("-- RENDER ARGUMENT ERROR: % --", template_name);
     }
     req := `req;
-    for args {
-        Set(template.params[it_index], it);
-    }
+    for args Set(template.params[it_index], it);
     return render_to_string(`req, template);
 }
-Render :: (template_name: string, content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
-    template, template_exists := get_template(template_name);
-    if !template_exists {
-        print("-- TEMPLATE NOT FOUND: % --\n", template_name);
-        return;
-    }
-    content_type_string: string;
-    if content_type == {
-        case .HTML; content_type_string = "text/html; charset=utf-8";
-        case .JSON; content_type_string = "text/json; charset=utf-8";
-    }
+Render_Each :: (items: *$T, code: Code) -> string #expand {
+    req := `req;
     res := `res;
-    Set_Header("Content-Type", content_type_string);
-    `res.body = render_to_string(`req, template);
-    `res.status = status;
+    builder: String_Builder;
+    defer free_buffers(*builder);
+    for <<items {
+        #insert_internal code;
+    }
+    return builder_to_string(*builder);
+
+    Render_It :: (template_name: string, args: ..Any) #expand {
+        req := `req;
+        res := `res;
+        append(*`builder, Render(template_name, ..args));
+    }
 }
 get_template :: (name: string) -> template: *Template = null, success: bool = true #must {
     template := table_find_pointer(templates, name);
@@ -523,8 +548,9 @@ render_to_string :: (req: *Request, template: *Template) -> string #must {
             case .TEXT;
                 append(*output_builder, it.text);
             case .PARAM;
-                value, success := table_find(req.params, template.params[it.param_id]);
-                append(*output_builder, ifx success then value else "!!PARAM ERROR!!");
+                param_name := template.params[it.param_id];
+                value, found := Get(param_name);
+                append(*output_builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
         }
     }
     return builder_to_string(*output_builder);
@@ -545,14 +571,17 @@ decode_url :: (text: string) -> string {
         }
         if next_percent > 0 then append(*builder, slice(str, 0, next_percent));
         a := str[next_percent+1];
-        if a >= #char "a" then a -= #char "a" - #char "A";
-        if a >= #char "A" then a -= #char "A" - 10;
-        else a -= #char "0";
         b := str[next_percent+2];
-        if b >= #char "a" then b -= #char "a" - #char "A";
-        if b >= #char "A" then b -= #char "A" - 10;
-        else b -= #char "0";
-        append(*builder, cast(u8) 16 * a + b);
+        if is_hex_number(a) && is_hex_number(b) {
+            if a >= #char "a" then a -= #char "a" - #char "A";
+            if a >= #char "A" then a -= #char "A" - 10;
+            else a -= #char "0";
+            if b >= #char "a" then b -= #char "a" - #char "A";
+            if b >= #char "A" then b -= #char "A" - 10;
+            else b -= #char "0";
+            append(*builder, cast(u8) 16 * a + b);
+        }
+        else append(*builder, slice(str, next_percent, next_percent + 2));
         str = slice(str, next_percent + 3, str.count);
     }
     return builder_to_string(*builder);
@@ -574,6 +603,7 @@ xprint :: (args: ..Any) -> string {
     for args print_to_builder(*builder, tprint("%", it));
     return builder_to_string(*builder);
 }
+json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 //------------------------------------------------------------------------------
 #load "Winsock.jai";
 

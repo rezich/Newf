@@ -13,6 +13,10 @@ add_post :: (using guestbook: *Guestbook, body: string) {
     post.body = body;
     array_add(*guestbook.posts, post);
 }
+get_post :: (using guestbook: *Guestbook, id: int) -> post: *Guestbook.Post = null, exists: bool = true {
+    if id > posts.count return exists = false;
+    return *posts[id];
+}
 
 guestbook: Guestbook;
 
@@ -20,60 +24,67 @@ guestbook: Guestbook;
 main :: () {
     init_template_system();
 
-    add_post(*guestbook, "first! lol");
 
     before_route((req: *Request, res: *Response) {
         Set("current_year", 2021);
         Set("site_title", "Website");
     });
 
+
+    // homepage
     route(.GET, "/", (req: *Request, res: *Response) {
         Set("page_title", "homepage");
-        {
-            builder: String_Builder;
-            defer free_buffers(*builder);
-            //for guestbook.posts append(*builder, tprint("<a href=\"/guestbook/%1\"><h2>Post #%1</h2></a><p>%2</p>\n<hr />\n", it.id, it.body));
-            for guestbook.posts append(*builder, Tpl("guestbook_post", it.id, it.body));
-            Set("guestbook_posts", builder_to_string(*builder));
-        }
-        Set("body", Tpl("home"));
-        Render("index");
+        Set("guestbook_posts", Render_Each(*guestbook.posts, #code {
+            Render_It("guestbook_post", it.id, it.body);
+        }));
+        Set("body", Render("home"));
+        Respond(Render("index"));
     });
+    // guestbook post detail page
     route(.GET, "/guestbook/:id", (req: *Request, res: *Response) {
-        id, id_given := Param_int("id");
-        if !id_given then Respond(400, "Malformed guestbook post ID");
-        if id >= guestbook.posts.count then Respond(404, "Guestbook post does not exist");
-        post := guestbook.posts[id];
+        id, id_valid := Get_Int("id");
+        if !id_valid then Respond(status=400, body="Malformed guestbook post ID");
+        post, post_exists := get_post(*guestbook, id);
+        if !post_exists then Respond(status=404, body="Guestbook post does not exist");
         Set("page_title", tprint("Guestbook post #%", id));
         Set("post_body", post.body);
-        Set("body", Tpl("guestbook_post"));
-        Render("index");
+        Set("body", Render("guestbook_post"));
+        Respond(Render("index"));
     });
+    // guestbook post submission
     route(.POST, "/guestbook/post", (req: *Request, res: *Response) {
-        body, body_given := Param("post_body");
-        if !body_given then Respond(400, "Did not provide body.");
+        body, body_given := Get("post_body");
+        if !body_given then Respond(status=400, body="Did not provide body.");
         add_post(*guestbook, body);
         Redirect("/");
     });
+    // guestbook API
+    route(.GET, "api", "/v1/guestbook", (req: *Request, res: *Response) {
+        Respond(Render("api/guestbook", guestbook.posts.count), content_type=.JSON);
+    });
+    // guestbook post detail API
     route(.GET, "api", "/v1/guestbook/:id", (req: *Request, res: *Response) {
-        id, id_given := Param_int("id");
-        if !id_given then Respond(400, "Malformed guestbook post ID");
-        if id >= guestbook.posts.count then Respond(404, "Guestbook post does not exist.");
-        post := guestbook.posts[id];
+        id, id_given := Get_Int("id");
+        if !id_given then Respond(status=400, body=json_error("Malformed guestbook post ID"));
+        post, post_exists := get_post(*guestbook, id);
+        if !post_exists then Respond(status=404, body=json_error("Guestbook post does not exist."));
         Set("post_body", post.body);
-        Render("api/guestbook", content_type=.JSON);
+        Respond(Render("api/guestbook_post"), content_type=.JSON);
     });
+    // invalid API handler
     route(.GET, "api", "*", (req: *Request, res: *Response) {
-        Respond(400);
+        Respond(status=400);
     });
+    // catch-all 404
     route(.GET, "*", "*", (req: *Request, res: *Response) {
         Set("page_title", "page not found");
-        Set("body", Tpl("404"));
-        Render("index", status=404);
+        Set("body", Render("404"));
+        Respond(Render("index"), status=404);
     });
 
 
     //after_route((req: *Request, res: *Response) { sleep_milliseconds(500); });
+
 
     server := create_server(8000);
     start(server);
