@@ -1,6 +1,6 @@
 #module_parameters(
     //BUILDING := false,
-    HOSTNAME := "localhost:8000"
+    HOSTNAME := "localhost"
 );
 
 /*#if BUILDING #load "src/Meta.jai";

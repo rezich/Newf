@@ -14,7 +14,7 @@ add_post :: (using guestbook: *Guestbook, body: string) {
     array_add(*guestbook.posts, post);
 }
 get_post :: (using guestbook: *Guestbook, id: int) -> post: *Guestbook.Post = null, exists: bool = true {
-    if id > posts.count return exists = false;
+    if id >= posts.count return exists = false;
     return *posts[id];
 }
 
@@ -34,7 +34,7 @@ main :: () {
     // homepage
     route(.GET, "/", (req: *Request, res: *Response) {
         Set("page_title", "homepage");
-        Set("guestbook_posts", Render_Each(*guestbook.posts, #code {
+        Set("guestbook_posts", Render_Each(guestbook.posts, #code {
             Render_It("guestbook_post", it.id, it.body);
         }));
         Set("body", Render("home"));
@@ -43,9 +43,9 @@ main :: () {
     // guestbook post detail page
     route(.GET, "/guestbook/:id", (req: *Request, res: *Response) {
         id, id_valid := Get_Int("id");
-        if !id_valid then Respond(status=400, body="Malformed guestbook post ID");
+        if !id_valid then Reroute(not_found);
         post, post_exists := get_post(*guestbook, id);
-        if !post_exists then Respond(status=404, body="Guestbook post does not exist");
+        if !post_exists then Reroute(not_found);
         Set("page_title", tprint("Guestbook post #%", id));
         Set("post_body", post.body);
         Set("body", Render("guestbook_post"));
@@ -65,9 +65,9 @@ main :: () {
     // guestbook post detail API
     route(.GET, "api", "/v1/guestbook/:id", (req: *Request, res: *Response) {
         id, id_given := Get_Int("id");
-        if !id_given then Respond(status=400, body=json_error("Malformed guestbook post ID"));
+        if !id_given then Respond(status=400, body=json_error("Malformed guestbook post ID"), content_type=.JSON);
         post, post_exists := get_post(*guestbook, id);
-        if !post_exists then Respond(status=404, body=json_error("Guestbook post does not exist."));
+        if !post_exists then Respond(status=404, body=json_error("Guestbook post does not exist."), content_type=.JSON);
         Set("post_body", post.body);
         Respond(Render("api/guestbook_post"), content_type=.JSON);
     });
@@ -76,14 +76,22 @@ main :: () {
         Respond(status=400);
     });
     // catch-all 404
-    route(.GET, "*", "*", (req: *Request, res: *Response) {
+    route(.GET, "*", "*", not_found);
+
+
+    not_found :: (req: *Request, res: *Response) {
         Set("page_title", "page not found");
         Set("body", Render("404"));
         Respond(Render("index"), status=404);
-    });
+    }
+    json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 
 
-    //after_route((req: *Request, res: *Response) { sleep_milliseconds(500); });
+    /*after_route((req: *Request, res: *Response) {
+        for 0..res.body.count-1
+            if (res.body[it] >= #char "a" && res.body[it] <= #char "z") res.body[it] ^= 0x20;
+    });*/
+    after_route((req: *Request, res: *Response) { sleep_milliseconds(500); });
 
 
     server := create_server(8000);
@@ -91,5 +99,4 @@ main :: () {
 }
 
 #import "Web_Framework";
-#import "Hash_Table";
 #import "Basic";

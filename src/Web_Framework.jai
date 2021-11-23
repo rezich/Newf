@@ -52,9 +52,6 @@ Response :: struct {
 }
 
 uninit :: (using res: *Response) { uninit(*headers); }
-Set_Header :: (key: string, value: Any) #expand {
-    table_set(*`res.headers, key, tprint("%", value));
-}
 get_http_response_string :: inline (using res: *Response) -> string {
     header_string: string;
     {
@@ -145,7 +142,7 @@ Route :: struct {
     stretches: [..] Stretch;
     params: [..] string;
 
-    Stretch :: struct {
+    Stretch :: struct { // Merriam-Webster, Entry 2, Definition 4a
         type: Type;
         text: string;
 
@@ -218,18 +215,6 @@ route :: (method: Request_Method, subdomain: string, path: string, response: Res
         }
     }
 }
-Get :: (key: string) -> value: string = "", success: bool = true #must #expand {
-    value, success := table_find(`req.params, key);
-    if !success return success = false;
-    return value;
-}
-Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand{
-    string_value, key_success := table_find(`req.params, key);
-    if !key_success return success = false;
-    int_value, parse_success := parse_int(*string_value);
-    if !parse_success return success = false;
-    return int_value;
-}
 //------------------------------------------------------------------------------
 // Server
 BUFFER_SIZE :: 65536;
@@ -255,6 +240,11 @@ start :: (using server: *Server) {
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(port);
+    {
+        socket_mode: u32 = 1;
+        if ioctlsocket(listen_socket, FIONBIO, *socket_mode) < 0 log("Failed to set socket mode!");
+        print("SOCKET MODE: %\n", socket_mode);
+    }
     if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 log("Failed to bind port!");
     if listen(listen_socket, 64) < 0 log("Failed to listen to port!");
 
@@ -351,7 +341,7 @@ start :: (using server: *Server) {
                 defer n += 1;
                 if stretch.type == {
                     case .WILDCARD;
-                        str = ""; // hack?
+                        str = "";
                     case .PATH;
                         if !begins_with(str, stretch.text) continue;
                         str = slice(str, stretch.text.count, str.count);
@@ -365,9 +355,7 @@ start :: (using server: *Server) {
                 }
             }
             if str == "" && n == route.stretches.count {
-                for param, param_index: params {
-                    table_set(*req.params, param_index, param);
-                }
+                for params table_set(*req.params, it_index, it);
                 proc = route.response;
                 break;
             }
@@ -465,25 +453,36 @@ init_template_system :: (relative_template_path: string = "/templates", extensio
                 after_text.text = text_after;
                 array_add(*template.pieces, after_text);
             }
-            // Debug
-            /*write_string("\n\n---\n");
-            for parsed.pieces {
-                if it.type == {
-                    case .TEXT;
-                        write_string("TEXT: ");
-                        write_string(it.text);
-                        write_string("\n");
-                    case .PARAM;
-                        write_string("PARAM: ");
-                        print("% (%)", it.param_id, parsed.params[it.param_id]);
-                        write_string("\n");
-                }
-            }
-            write_string("\n---\n\n");*/
             table_add(*templates, short_name, template);
         }
         else print("failed to load template: %\n", it);
     }
+}
+//------------------------------------------------------------------------------
+// Macros
+Get :: (key: string) -> value: string = "", success: bool = true #must #expand {
+    value, success := table_find(`req.params, key);
+    if !success return success = false;
+    return value;
+}
+Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand{
+    string_value, key_success := table_find(`req.params, key);
+    if !key_success return success = false;
+    int_value, parse_success := parse_int(*string_value);
+    if !parse_success return success = false;
+    return int_value;
+}
+Set :: (key: string, value: string) #expand {
+    table_set(*`req.params, key, value);
+}
+Set :: (key: string, value: Any) #expand {
+    table_set(*`req.params, key, tprint("%", value));
+}
+Set_Header :: (key: string, value: string) #expand {
+    table_set(*`res.headers, key, value);
+}
+Set_Header :: (key: string, value: Any) #expand {
+    table_set(*`res.headers, key, tprint("%", value));
 }
 Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
     content_type_string: string;
@@ -503,62 +502,49 @@ Redirect :: (to: string) #expand {
     Set_Header("Location", to);
     `return;
 }
-Redirect_To_Hostname :: () #expand {
-    `res.status = 302;
-    res := `res;
-    Set_Header("Location", HOSTNAME);
+Reroute :: (to: (req: *Request, res: *Response)) #expand {
+    req, res := `req, `res;
+    to(req, res);
     `return;
 }
 Render :: (template_name: string, args: ..Any) -> string #must #expand {
-    template, template_exists := get_template(template_name);
-    if !template_exists return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
+    req, res := `req, `res;
+    template := table_find_pointer(templates, template_name);
+    if !template return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
     if args.count > 0 && args.count != template.params.count {
-        return tprint("-- RENDER ARGUMENT ERROR: % --", template_name);
+        return tprint("-- RENDER ARGUMENT ERROR: % --\n", template_name);
     }
-    req := `req;
     for args Set(template.params[it_index], it);
-    return render_to_string(`req, template);
-}
-Render_Each :: (items: *$T, code: Code) -> string #expand {
-    req := `req;
-    res := `res;
     builder: String_Builder;
     defer free_buffers(*builder);
-    for <<items {
+    for template.pieces {
+        if it.type == {
+            case .TEXT;
+                append(*builder, it.text);
+            case .PARAM;
+                param_name := template.params[it.param_id];
+                value, found := Get(param_name);
+                append(*builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
+        }
+    }
+    return builder_to_string(*builder);
+}
+Render_Each :: (items: $T, code: Code) -> string #expand {
+    req, res := `req, `res;
+    builder: String_Builder;
+    defer free_buffers(*builder);
+    for items {
         #insert_internal code;
     }
     return builder_to_string(*builder);
 
     Render_It :: (template_name: string, args: ..Any) #expand {
-        req := `req;
-        res := `res;
+        req, res := `req, `res;
         append(*`builder, Render(template_name, ..args));
     }
 }
-get_template :: (name: string) -> template: *Template = null, success: bool = true #must {
-    template := table_find_pointer(templates, name);
-    if !template return success = false;
-    return template;
-}
-render_to_string :: (req: *Request, template: *Template) -> string #must {
-    output_builder: String_Builder;
-    
-    for template.pieces {
-        if it.type == {
-            case .TEXT;
-                append(*output_builder, it.text);
-            case .PARAM;
-                param_name := template.params[it.param_id];
-                value, found := Get(param_name);
-                append(*output_builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
-        }
-    }
-    return builder_to_string(*output_builder);
-}
-Set :: (key: string, value: Any) #expand {
-    table_set(*`req.params, key, tprint("%", value));
-}
 //------------------------------------------------------------------------------
+// Utils
 decode_url :: (text: string) -> string {
     builder: String_Builder;
     defer free_buffers(*builder);
@@ -603,7 +589,6 @@ xprint :: (args: ..Any) -> string {
     for args print_to_builder(*builder, tprint("%", it));
     return builder_to_string(*builder);
 }
-json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 //------------------------------------------------------------------------------
 #load "Winsock.jai";
 

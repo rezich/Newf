@@ -76,7 +76,7 @@ WINSOCK_VERSION :: #run MAKEWORD(2, 2);
 IOCPARM_MASK :: 0x7f;
 IOC_IN :: 0x80000000;
 _IOW :: (x,y,t) => (IOC_IN|((cast(s32)size_of(type_of(t))&IOCPARM_MASK)<<16)|((x)<<8)|(y));
-FIONBIO :: #run  _IOW(#char "f", 126, u32);
+FIONBIO :: #run _IOW(#char "f", 126, u32);
 
 AF_UNSPEC    ::  0;
 AF_INET      ::  2;
