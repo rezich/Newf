@@ -107,7 +107,7 @@ start :: (using server: *Server) {
 
         res: Response;
         defer uninit(*res);
-        proc: Response_Proc;
+        proc: Route_Proc;
 
         params: Table(string, string);
         defer uninit(*params);
@@ -197,10 +197,10 @@ get_http_status_string :: (status: HTTP_Status) -> string {
         case 200; return "OK"; case 201; return "Created"; case 202; return
         "Accepted"; case 204; return "No Content"; case 205; return
         "Reset Content"; case 206; return "Partial Content";
-        case 300; return "Multiple Choice"; case 301; return "Moved Permanently";
-        case 302; return "Found"; case 303; return "See Other"; case 304; return
-        "Not Modified"; case 307; return "Temporary Redirect"; case 308; return
-        "Permanent Redirect";
+        case 300; return "Multiple Choice"; case 301;
+        return "Moved Permanently"; case 302; return "Found"; case 303; return
+        "See Other"; case 304; return "Not Modified"; case 307; return
+        "Temporary Redirect"; case 308; return "Permanent Redirect";
         case 400; return "Bad Request"; case 401; return "Unauthorized"; case
         403; return "Forbidden"; case 404; return "Not Found"; case 405; return
         "Method Not Allowed"; case 406; return "Not Acceptable"; case 408;

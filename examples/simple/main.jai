@@ -32,7 +32,7 @@ main :: () {
 
 
     // homepage
-    route(.GET, "/", Route_Proc {
+    route(.GET, "/", (req: *Request, res: *Response) {
         Set("page_title", "homepage");
         Set("guestbook_posts", Render_Each(guestbook.posts, #code {
             Render_It("guestbook_post", it.id, it.body);
