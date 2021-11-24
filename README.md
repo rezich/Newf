@@ -1,28 +1,13 @@
-# wfw
-web framework for a new language
+Web_Framework
+=============
 
-for a demo, run `jai wfw.jai;.\wfw.exe`, then try the following in your browser:
+check [the example](examples/simple) to see how it works. right now the
+metaprogram does nothing but set the executable name; this module does not
+presently require use of a metaprogram.
 
- - http://localhost:8000
- - http://localhost:8000/this_path_will_404
- - http://localhost:8000/post/108
- - http://localhost:8000/post/108/edit
- - http://localhost:8000/user/adam
+Roadmap
+-------
 
-Windows only for now!
-
-----
-
-## Features
- - routing (with parameters!)
- - middleware system
- - simple template system (implemented as middleware!)
- - HTTP server (simple, unthreaded, terrible!)
-
-## TODO
- - ~~add HTTP server~~
- - check for memory leaks
- - improve stuff
- - encapsulate everything in module/file scopes
- - make sample website
- - UNIX (???)
+ - add threading to server
+ - rework server to make it better and completely HTTP/1.0 compliant
+ - ...

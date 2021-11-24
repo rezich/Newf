@@ -1,4 +1,3 @@
-.build
-*.pdb
 *.exe
-modules/*/
+*.pdb
+*.dot
