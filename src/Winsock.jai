@@ -45,6 +45,12 @@ sockaddr_in :: struct {
     sin_zero :  [8] u8;
 }
 
+FD_SETSIZE :: 64;
+fd_set :: struct {
+    fd_count: u32;
+    fd_array: [FD_SETSIZE] Socket;
+}
+
 WSAStartup :: (version: u16, wsaData: *WSAData) -> u32 #foreign winsock;
 WSACleanup :: () -> s32 #foreign winsock;
 WSAGetLastError :: () -> s32 #foreign winsock;
@@ -61,15 +67,16 @@ send :: (s: Socket, buf: *u8, len: s32, flags: s32) -> s32 #foreign winsock;
 shutdown :: (s: Socket, how: s32) -> s32 #foreign winsock;
 socket :: (af: s32, type: s32, protocol: s32) -> Socket #foreign winsock;
 
-_IOW :: (x,y,t) => (IOC_IN|((cast(s32)size_of(type_of(t))&IOCPARM_MASK)<<16)|((x)<<8)|(y));
 MAKEWORD :: inline (low: u8, high: u8) -> u16 { return cast(u16)((high << 8) | low); }
 
 WINSOCK_VERSION :: #run MAKEWORD(2, 2);
 
 IOCPARM_MASK :: 0x7f;
 IOC_IN :: 0x80000000;
-FIONBIO :: #run _IOW(#char "f", 126, u32);
-FD_SETSIZE :: 64;
+/*_IOW :: (x,y,t) => (IOC_IN|((cast(s32)size_of(type_of(t))&IOCPARM_MASK)<<16)|((x)<<8)|(y));
+FIONBIO :: #run _IOW(#char "f", 126, u32);*/
+FIONBIO :: -2147195266;
+#assert(FIONBIO == -2147195266);
 
 AF_UNSPEC    ::  0;
 AF_INET      ::  2;
@@ -93,5 +100,8 @@ INADDR_ANY     :: 0;
 SD_RECEIVE :: 0;
 SD_SEND    :: 1;
 SD_BOTH    :: 2;
+
+WSABASEERR     :: 10000;
+WSAEWOULDBLOCK :: WSABASEERR+35;
 
 Socket :: u64;

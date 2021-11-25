@@ -88,14 +88,16 @@ main :: () {
 
 
     /*after_route((req: *Request, res: *Response) {
+        // currently doesn't work because routes are case-sensitive!
         for 0..res.body.count-1
             if (res.body[it] >= #char "a" && res.body[it] <= #char "z") res.body[it] ^= 0x20;
     });*/
-    after_route((req: *Request, res: *Response) { sleep_milliseconds(500); });
+    //after_route((req: *Request, res: *Response) { sleep_milliseconds(500); });
 
 
-    server := create_server(8000);
-    start(server);
+    /*server := create_server(8000);
+    start(server);*/
+    listen(8000);
 }
 
 #import "Web_Framework";

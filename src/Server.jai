@@ -1,6 +1,9 @@
 //------------------------------------------------------------------------------
 // Server
-BUFFER_SIZE :: 65536;
+BUFFER_SIZE :: 1024 * 1024 * 4;
+REQUEST_BUFFER_SIZE :: 65536;
+MAX_THREADS :: 8;
+TIMEOUT_SECONDS :: 10;
 
 Server :: struct {
     port: u16;
@@ -8,22 +11,28 @@ Server :: struct {
     running: bool;
     thread_group: Thread_Group;
 }
+Request_Resolution :: struct {
+    client: Client;
+    req: Request;
+    res: Response;
+    buffer: [BUFFER_SIZE+1] u8;
+    buffer_length: s32;
+}
+Client :: struct {
+    socket: Socket;
+}
 
-listen :: (port: u16=80) {
-    server: Server;
-    server.port = port;
+listen :: (_port: u16=80) {
+    using server: Server;
+    port = _port;
     num_cpus := get_number_of_processors();
     #if OS == .WINDOWS || OS == .LINUX then num_cpus /= 2;
     num_threads := max(num_cpus-1, 2);
     print("Creating server with % threads.\n", num_threads);
-    init(*server.thread_group, num_threads, process_client);
-}
-create_server :: (port: u16=80) -> *Server {
-    server := New(Server);
-    server.port = port;
-    return server;
-}
-start :: (using server: *Server) {
+    init(*thread_group, num_threads, resolve);
+    thread_group.name = "server";
+    thread_group.logging = true;
+
     running = true;
     listen_socket, incoming_socket: Socket;
     client_address, server_address: sockaddr_in = ---;
@@ -53,135 +62,26 @@ start :: (using server: *Server) {
         return;
     }
 
+    start(*thread_group);
     length: int;
     while running {
+        results := get_completed_work(*thread_group);
+        for results {
+            using r := cast(*Request_Resolution) it;
+            uninit(*req);
+            uninit(*res);
+            free(r);
+        }
+
         length = size_of(type_of(client_address));
         incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
-        defer shutdown(incoming_socket, SD_BOTH);
-        if incoming_socket < 0 then print("Error!");
-        else handle_request(incoming_socket);
+        if incoming_socket != INVALID_SOCKET {
+            work := New(Request_Resolution);
+            work.client.socket = incoming_socket;
+            add_work(*thread_group, work, tprint("%", incoming_socket));
+        }
     }
-
-    handle_request :: inline (socket: Socket) {
-        buffer: [BUFFER_SIZE + 1] u8;
-        nbytes := recv(socket, buffer.data, BUFFER_SIZE, 0);
-        if nbytes <= 0 return;
-        if nbytes > 0 && nbytes < BUFFER_SIZE then buffer[nbytes] = 0;
-        else buffer[0] = 0;
-
-        // parse request
-        req: Request;
-        defer uninit(*req);
-        req_string := to_string(buffer.data);
-        print("%\n", req_string);
-        method_end := find_index_from_left(req_string, " ");
-        if method_end < 0 return;
-        if slice(req_string, 0, method_end) == {
-            case "GET"; req.uri.method = .GET;
-            case "POST"; req.uri.method = .POST;
-            case; req.uri.method = .PATCH; // ???
-        }
-        req_string = slice(req_string, method_end + 1, req_string.count);
-        path_end := find_index_from_left(req_string, " ");
-        if path_end < 0 return;
-        req.uri.path = slice(req_string, 0, path_end);
-        req_string = slice(req_string, path_end + 1, req_string.count);
-        http_end := find_index_from_left(req_string, "\r\n");
-        if http_end < 0 return;
-        req_string = slice(req_string, http_end, req_string.count);
-        for split(req_string, "\r\n") {
-            kv := split(it, ": ");
-            if kv.count == 2 {
-                table_add(*req.uri.headers, kv[0], kv[1]);
-                // parse subdomain
-                if kv[0] == "Host" {
-                    found, left := split_from_left(kv[1], HOSTNAME);
-                    if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
-                }
-            }
-            else {
-                kv = split(it, "=");
-                if kv.count == 2 Set(decode_form(kv[0]), decode_form(kv[1]));
-            }
-        }
-
-        res: Response;
-        defer uninit(*res);
-        proc: Route_Proc;
-
-        params: Table(string, string);
-        defer uninit(*params);
-
-        // parse query string & ignore it for routing
-        path_without_query_string: string;
-        query_string_begin := find_index_from_left(req.uri.path, #char "?");
-        if query_string_begin >= 0 {
-            path_without_query_string = slice(req.uri.path, 0, query_string_begin);
-            query_string := decode_url(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
-            req.uri.query = query_string;
-            for split(query_string, "&") {
-                second: *string;
-                kv := split(it, "=");
-                if kv.count == {
-                    case 1; second = *kv[0];
-                    case 2; second = *kv[1];
-                }
-                table_set(*req.uri.query_params, kv[0], <<second);
-                Set(kv[0], <<second);
-            }
-        }
-        else path_without_query_string = req.uri.path;
-
-        // routing
-        for route: routes {
-            if req.uri.method != route.method continue;
-            if routes_match_subdomains && req.uri.subdomain != route.subdomain && route.subdomain != "*" continue;
-            table_reset(*params);
-            str := path_without_query_string;
-            n := 0;
-            current_param := 0;
-            end_of_param: int;
-            while str != "" && n < route.stretches.count {
-                stretch := *route.stretches[n];
-                defer n += 1;
-                if stretch.type == {
-                    case .WILDCARD;
-                        str = "";
-                    case .PATH;
-                        if !begins_with(str, stretch.text) continue;
-                        str = slice(str, stretch.text.count, str.count);
-                    case .PARAM;
-                        end_of_param := find_index_of_any_from_left(str, ROUTE_PATH_SEPARATORS);
-                        if end_of_param < 0 then end_of_param = str.count;
-                        if end_of_param == 0 break;
-                        table_add(*params, route.params[current_param], slice(str, 0, end_of_param));
-                        str = slice(str, end_of_param, str.count);
-                        current_param += 1;
-                }
-            }
-            if str == "" && n == route.stretches.count {
-                for params table_set(*req.params, it_index, it);
-                proc = route.response;
-                break;
-            }
-        }
-
-        // set builtin params
-        Set("HOSTNAME", HOSTNAME);
-
-        // process client
-        for before_plugins it(*req, *res);
-        if proc then proc(*req, *res); else print("No proc...?\n");
-        for after_plugins it(*req, *res);
-
-        for 0..BUFFER_SIZE buffer[it] = 0;
-
-        response := get_http_response_string(*res);
-        memcpy(buffer.data, response.data, response.count);
-        buffer[response.count] = 0;
-        send(socket, buffer.data, cast(s32) response.count, 0);
-        reset_temporary_storage();
-    }
+    shutdown(*thread_group);
 }
 get_http_response_string :: inline (using res: *Response) -> string {
     header_string: string;
@@ -223,11 +123,143 @@ get_http_status_string :: (status: HTTP_Status) -> string {
     }
     return "";
 }
-//------------------------------------------------------------------------------
-// Client
-Client :: struct {
-    req: Request;
-    res: Response;
+resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Continue_Status {
+    request_resolution := cast(*Request_Resolution) work;
+    using request_resolution;
+    defer shutdown(client.socket, SD_BOTH);
+
+    request_buffer: [REQUEST_BUFFER_SIZE+1] u8;
+    waiting := true;
+    start_time := get_time();
+    while waiting {
+        current_time := get_time();
+        if current_time - start_time >= TIMEOUT_SECONDS {
+            log("timed out.");
+            return .CONTINUE;
+        }
+        bytes_received := recv(client.socket, request_buffer.data, REQUEST_BUFFER_SIZE, 0);
+        if bytes_received < 0 {
+            err := WSAGetLastError();
+            if err == {
+                case WSAEWOULDBLOCK; continue;
+                case; log("recv error: %", err); return .CONTINUE;
+            };
+        }
+        /*if bytes_received == 0 { log("0 bytes received"); return .CONTINUE; }*/
+        if bytes_received < REQUEST_BUFFER_SIZE then request_buffer[bytes_received] = 0;
+        else request_buffer[REQUEST_BUFFER_SIZE] = 0;
+        waiting = false;
+    }
+    // parse request
+    req.raw = to_string(request_buffer.data);
+    req_string := req.raw;
+    method_end := find_index_from_left(req_string, " ");
+    if method_end < 0 return .CONTINUE;
+    if slice(req_string, 0, method_end) == {
+        case "GET"; req.uri.method = .GET;
+        case "POST"; req.uri.method = .POST;
+        case; req.uri.method = .PATCH; // ???
+    }
+    req_string = slice(req_string, method_end + 1, req_string.count);
+    path_end := find_index_from_left(req_string, " ");
+    if path_end < 0 return .CONTINUE;
+    req.uri.path = slice(req_string, 0, path_end);
+    req_string = slice(req_string, path_end + 1, req_string.count);
+    http_end := find_index_from_left(req_string, "\r\n");
+    if http_end < 0 return .CONTINUE;
+    req_string = slice(req_string, http_end, req_string.count);
+    for split(req_string, "\r\n") {
+        kv := split(it, ": ");
+        if kv.count == 2 {
+            table_add(*req.uri.headers, kv[0], kv[1]);
+            // parse subdomain
+            if kv[0] == "Host" {
+                found, left := split_from_left(kv[1], HOSTNAME);
+                if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
+            }
+        }
+        else {
+            kv = split(it, "=");
+            if kv.count == 2 Set(decode_form(kv[0]), decode_form(kv[1]));
+        }
+    }
+
+    proc: Route_Proc;
+
+    params: Table(string, string);
+    defer uninit(*params);
+
+    // parse query string & ignore it for routing
+    path_without_query_string: string;
+    query_string_begin := find_index_from_left(req.uri.path, #char "?");
+    if query_string_begin >= 0 {
+        path_without_query_string = slice(req.uri.path, 0, query_string_begin);
+        query_string := decode_url(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
+        req.uri.query = query_string;
+        for split(query_string, "&") {
+            second: *string;
+            kv := split(it, "=");
+            if kv.count == {
+                case 1; second = *kv[0];
+                case 2; second = *kv[1];
+            }
+            table_set(*req.uri.query_params, kv[0], <<second);
+            Set(kv[0], <<second);
+        }
+    }
+    else path_without_query_string = req.uri.path;
+
+    // routing
+    for route: routes {
+        if req.uri.method != route.method continue;
+        if routes_match_subdomains && req.uri.subdomain != route.subdomain && route.subdomain != "*" continue;
+        table_reset(*params);
+        str := path_without_query_string;
+        n := 0;
+        current_param := 0;
+        end_of_param: int;
+        while str != "" && n < route.stretches.count {
+            stretch := *route.stretches[n];
+            defer n += 1;
+            if stretch.type == {
+                case .WILDCARD;
+                    str = "";
+                case .PATH;
+                    if !begins_with(str, stretch.text) continue;
+                    str = slice(str, stretch.text.count, str.count);
+                case .PARAM;
+                    end_of_param := find_index_of_any_from_left(str, ROUTE_PATH_SEPARATORS);
+                    if end_of_param < 0 then end_of_param = str.count;
+                    if end_of_param == 0 break;
+                    table_add(*params, route.params[current_param], slice(str, 0, end_of_param));
+                    str = slice(str, end_of_param, str.count);
+                    current_param += 1;
+            }
+        }
+        if str == "" && n == route.stretches.count {
+            for params table_set(*req.params, it_index, it);
+            proc = route.response;
+            break;
+        }
+    }
+
+    // set builtin params
+    Set("HOSTNAME", HOSTNAME);
+
+    // process client
+    for before_plugins it(*req, *res);
+    if proc then proc(*req, *res); else log("No proc...?\n");
+    for after_plugins it(*req, *res);
+
+    for 0..BUFFER_SIZE buffer[it] = 0;
+
+    response := get_http_response_string(*res);
+    buffer_length = cast(s32) response.count;
+    memcpy(buffer.data, response.data, buffer_length);
+    buffer[buffer_length] = 0;
+    if send(client.socket, buffer.data, buffer_length, 0) < 0 log("ERROR");
+    //reset_temporary_storage();
+    return .CONTINUE;
 }
 
 #load "Winsock.jai";

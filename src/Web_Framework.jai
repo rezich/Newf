@@ -24,6 +24,7 @@ Request :: struct {
         subdomain: string;
     }
     params: Table(string, string);
+    raw: string;
 }
 
 uninit :: (using req: *Request) {
@@ -62,8 +63,8 @@ after_route :: inline (proc: After_Plugin_Proc) {
 //------------------------------------------------------------------------------
 // Route
 ROUTE_PATH_SEPARATORS :: "/";
-Route_Proc :: #type (req: *Request, res: *Response);
-
+Route_Proc :: #type (*Request, *Response);
+//#scope_file
 Route :: struct {
     method: Request_Method;
     subdomain: string;
@@ -82,7 +83,7 @@ Route :: struct {
         }
     }
 }
-
+//#scope_export
 routes: [..] Route;
 routes_match_subdomains := false;
 
@@ -308,6 +309,16 @@ Render_Each :: (items: $T, code: Code) -> string #expand {
         append(*`builder, Render(template_name, ..args));
     }
 }
+/*Route :: (method: Request_Method, path: string, code: Code) #expand {
+    route(method, path, (req: *Request, res: *Response) {
+        #insert_internal code;
+    });
+}
+Route :: (method: Request_Method, subdomain: string, path: string, code: Code) #expand {
+    route(method, subdomain, path, (req: *Request, res: *Response) {
+        #insert_internal code;
+    });
+}*/
 //------------------------------------------------------------------------------
 // Utils
 decode_url :: (text: string) -> string {
