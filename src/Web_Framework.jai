@@ -1,7 +1,7 @@
 Headers :: #type Table(string, string);
+Cookies :: #type Table(string, string);
 //------------------------------------------------------------------------------
 // Request
-Query_Params :: #type Table(string, string);
 Request_Method :: enum {
     GET;
     HEAD;
@@ -20,15 +20,21 @@ Request :: struct {
         scheme: string;
         path: string;
         query: string;
-        query_params: Query_Params;
+        query_params: Table(string, string);
         subdomain: string;
     }
-    params: Table(string, string);
+    form_data: Table(string, string);
+    session: *Session;
+    cookies: Cookies;
     raw: string;
+    params: Table(string, string);
 }
 
 uninit :: (using req: *Request) {
     uninit(*uri.headers);
+    uninit(*uri.query_params);
+    uninit(*form_data);
+    uninit(*cookies);
     uninit(*params);
 }
 //------------------------------------------------------------------------------
@@ -40,11 +46,16 @@ HTTP_Content_Type :: enum {
 }
 Response :: struct {
     headers: Headers;
+    cookies: Cookies;
     body: string;
     status: HTTP_Status;
+    session: *Session;
 }
 
-uninit :: (using res: *Response) { uninit(*headers); }
+uninit :: (using res: *Response) {
+    uninit(*headers);
+    uninit(*cookies);
+}
 //------------------------------------------------------------------------------
 // Plugin
 Plugin_Proc :: #type (req: *Request, res: *Response);
@@ -227,30 +238,119 @@ init_template_system :: (relative_template_path: string = "/templates", extensio
     }
 }
 //------------------------------------------------------------------------------
+// Session
+Session :: struct {
+    token: TOKEN;
+    locator: Bucket_Locator;
+    ended: bool;
+    params: Table(string, string);
+
+    TOKEN :: string;
+}
+
+sessions: Table(Session.TOKEN, *Session);
+session_storage: Bucket_Array(Session, SESSIONS_PER_BUCKET, true);
+
+begin_session :: (req: *Request, res: *Response) { //TODO: probably remove session from req
+    if !req.session {
+        session: Session;
+        session.token = md5(tprint("%", get_time())); //TODO: lol
+        session.locator = bucket_array_add(*session_storage, session);
+        req.session = bucket_array_find_pointer(*session_storage, session.locator);
+        res.session = req.session;
+        table_add(*sessions, session.token, req.session);
+        Set_Cookie(SESSION_TOKEN, session.token);
+    }
+}
+load_or_begin_session :: (req: *Request, res: *Response, token: Session.TOKEN) {
+    existing, found := table_find(sessions, token);
+    if found && existing {
+        req.session = existing;
+        res.session = existing;
+        Set_Cookie(SESSION_TOKEN, existing.token);
+    }
+    else begin_session(req, res);
+}
+end_session :: (req: *Request, res: *Response) {
+    if req.session == null return;
+    table_remove(*sessions, req.session.token);
+    bucket_array_remove(*session_storage, req.session.locator);
+    req.session = null;
+    res.session = null;
+    Unset_Cookie(SESSION_TOKEN);
+}
+//------------------------------------------------------------------------------
 // Macros
 Get :: (key: string) -> value: string = "", success: bool = true #must #expand {
     value, success := table_find(`req.params, key);
     if !success return success = false;
     return value;
 }
-Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand{
+Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
     string_value, key_success := table_find(`req.params, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
+Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must #expand {
+    value, success := table_find(`req.cookies, key);
+    if !success return success = false;
+    return value;
+}
+Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
+    string_value, key_success := table_find(`req.cookies, key);
+    if !key_success return success = false;
+    int_value, parse_success := parse_int(*string_value);
+    if !parse_success return success = false;
+    return int_value;
+}
+Get_Header :: (key: string) -> value: string = "", success: bool = true #must #expand {
+    value, success := table_find(`req.uri.headers, key);
+    if !success return success = false;
+    return value;
+}
+Get_Header_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
+    string_value, key_success := table_find(`req.uri.headers, key);
+    if !key_success return success = false;
+    int_value, parse_success := parse_int(*string_value);
+    if !parse_success return success = false;
+    return int_value;
+}
+Get_Session :: (key: string) -> value: string = "", success: bool = true #must #expand {
+    req := `req;
+    if !req.session return success = false;
+    value, success := table_find(req.session.params, key);
+    if !success return success = false;
+    return value;
+}
+Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
+    req := `req;
+    if !req.session return success = false;
+    string_value, key_success := table_find(req.session.params, key);
+    if !key_success return success = false;
+    int_value, parse_success := parse_int(*string_value);
+    if !parse_success return success = false;
+    return int_value;
+}
+Set :: (key: string, value: Any) #expand { req := `req; Set(key, tprint("%", value)); }
 Set :: (key: string, value: string) #expand {
     table_set(*`req.params, key, value);
 }
-Set :: (key: string, value: Any) #expand {
-    table_set(*`req.params, key, tprint("%", value));
+Set_Cookie :: (key: string, value: Any) #expand { req, res := `req, `res; Set_Cookie(key, tprint("%", value)); }
+Set_Cookie :: (key: string, value: string) #expand {
+    table_set(*`res.cookies, key, value);
 }
+Unset_Cookie :: (key: string) #expand { req, res := `req; `res; Set_Cookie(key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT"); }
+Set_Header :: (key: string, value: Any) #expand { req := `req; Set_Header(tprint("%", value)); }
 Set_Header :: (key: string, value: string) #expand {
     table_set(*`res.headers, key, value);
 }
-Set_Header :: (key: string, value: Any) #expand {
-    table_set(*`res.headers, key, tprint("%", value));
+Set_Session :: (key: string, value: Any) #expand { req, res, sessions, session_storage := `req, `res, `sessions, `session_storage; Set_Session(key, tprint("%", value)); }
+Set_Session :: (key: string, value: string) #expand {
+    req, res, sessions, session_storage := `req, `res, `sessions, `session_storage;
+    begin_session(req, res);
+    table_set(*req.session.params, key, value);
 }
 Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
     content_type_string: string;
@@ -264,10 +364,12 @@ Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: 
     res.status = 200;
     `return;
 }
-Redirect :: (to: string) #expand {
-    `res.status = 302;
+Redirect :: (to: string, args: ..Any) #expand {
+    _to := "";
+    if args.count > 0 then _to = tprint(to, ..args); else _to = to;
     res := `res;
-    Set_Header("Location", to);
+    res.status = 302;
+    Set_Header("Location", _to);
     `return;
 }
 Reroute :: (to: (req: *Request, res: *Response)) #expand {
@@ -321,6 +423,12 @@ Route :: (method: Request_Method, subdomain: string, path: string, code: Code) #
 }*/
 //------------------------------------------------------------------------------
 // Utils
+bucket_array_find_pointer :: (using array: *Bucket_Array, locator: Bucket_Locator) -> *array.type {
+    bucket := all_buckets[locator.bucket_index];
+    assert(bucket.occupied[locator.slot_index] == true);
+    result := *bucket.data[locator.slot_index];
+    return result;
+}
 decode_url :: (text: string) -> string {
     builder: String_Builder; defer free_buffers(*builder);
     str := text;
@@ -369,8 +477,10 @@ xprint :: (args: ..Any) -> string {
 #import "File_Utilities";
 #import "Bucket_Array";
 #import "Hash_Table";
+#import "Atomics";
 #import "Thread";
 #import "System";
 #import "String";
 #import "Basic";
 #import "File";
+#import "md5";

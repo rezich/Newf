@@ -1,6 +1,8 @@
 #module_parameters(
     //BUILDING := false,
-    HOSTNAME := "localhost"
+    HOSTNAME := "localhost",
+    SESSIONS_PER_BUCKET := 1000,
+    SESSION_TOKEN := "_SESSION_TOKEN"
 );
 
 /*#if BUILDING #load "src/Meta.jai";

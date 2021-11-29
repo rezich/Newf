@@ -1,0 +1,6 @@
+<h2>Submit story</h2>
+<form action="/submit" method="post">
+    <label for="submit_headline">Headline:&nbsp;</label><input name="headline" id="submit_headline" /><br />
+    <label for="submit_body">Body text:&nbsp;</label><input name="body" id="submit_body" /><br />
+    <input type="submit" value="Submit" />
+</form>

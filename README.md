@@ -21,4 +21,9 @@ roadmap
 -------
 
  - rework server to make it better and completely HTTP/1.0 compliant
+ - expanded template syntax
+ - template hotloading
+ - static file routing
+ - Gemini support
+ - caching?
  - ...

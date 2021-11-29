@@ -54,15 +54,13 @@ listen :: (_port: u16=80) {
         if ioctlsocket(listen_socket, FIONBIO, *socket_mode) < 0 log("Failed to set socket mode!");
     }
     if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 {
-        log("Failed to bind port!");
-        return;
+        log("Failed to bind port!"); return;
     }
     if listen(listen_socket, 64) < 0 {
-        log("Failed to listen to port!");
-        return;
+        log("Failed to listen to port!"); return;
     }
 
-    start(*thread_group);
+    start(*thread_group); defer shutdown(*thread_group);
     length: int;
     while running {
         results := get_completed_work(*thread_group);
@@ -81,12 +79,12 @@ listen :: (_port: u16=80) {
             add_work(*thread_group, work, tprint("%", incoming_socket));
         }
     }
-    shutdown(*thread_group);
 }
 get_http_response_string :: inline (using res: *Response) -> string {
     header_string: string;
     builder: String_Builder; defer free_buffers(*builder);
     for headers append(*builder, tprint("%: %\r\n", it_index, it));
+    for cookies append(*builder, tprint("Set-Cookie: %=%\r\n", it_index, it));
     header_string = builder_to_string(*builder);
     return tprint("HTTP/1.0 % %\r\n%\r\n%", status, get_http_status_string(status), header_string, body);
 }
@@ -126,6 +124,7 @@ get_http_status_string :: (status: HTTP_Status) -> string {
 resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Continue_Status {
     request_resolution := cast(*Request_Resolution) work;
     using request_resolution;
+    defer reset_temporary_storage();
     defer shutdown(client.socket, SD_BOTH);
 
     request_buffer: [REQUEST_BUFFER_SIZE+1] u8;
@@ -153,6 +152,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
     // parse request
     req.raw = to_string(request_buffer.data);
     req_string := req.raw;
+    log("---\n%\n---", req_string);
     method_end := find_index_from_left(req_string, " ");
     if method_end < 0 return .CONTINUE;
     if slice(req_string, 0, method_end) == {
@@ -168,19 +168,44 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
     http_end := find_index_from_left(req_string, "\r\n");
     if http_end < 0 return .CONTINUE;
     req_string = slice(req_string, http_end, req_string.count);
+
+    section: enum {
+        HEADERS;
+        BODY;
+    } = .HEADERS; //TODO
+    parse_body := false;
+
     for split(req_string, "\r\n") {
         kv := split(it, ": ");
         if kv.count == 2 {
             table_add(*req.uri.headers, kv[0], kv[1]);
             // parse subdomain
-            if kv[0] == "Host" {
-                found, left := split_from_left(kv[1], HOSTNAME);
-                if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
+            if kv[0] == {
+                case "Host";
+                    found, left := split_from_left(kv[1], HOSTNAME);
+                    if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
+                case "Content-Type";
+                    if kv[1] == "application/x-www-form-urlencoded" then parse_body = true;
+                case "Cookie";
+                    for split(kv[1], "; ") {
+                        kv := split(it, "=");
+                        if kv.count == 2 {
+                            if kv[0] == SESSION_TOKEN then load_or_begin_session(*req, *res, kv[1]);
+                            table_add(*req.cookies, kv[0], kv[1]);
+                        }
+                    }
             }
         }
-        else {
-            kv = split(it, "=");
-            if kv.count == 2 Set(decode_form(kv[0]), decode_form(kv[1]));
+        else if parse_body {
+            for split(it, "&") {
+                kv = split(it, "=");
+                if kv.count == 2 {
+                    key := decode_form(kv[0]);
+                    value := decode_form(kv[1]);
+                    table_set(*req.form_data, key, value);
+                    Set(key, value);
+                }
+            }
         }
     }
 
@@ -258,7 +283,6 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
     memcpy(buffer.data, response.data, buffer_length);
     buffer[buffer_length] = 0;
     if send(client.socket, buffer.data, buffer_length, 0) < 0 log("ERROR");
-    //reset_temporary_storage();
     return .CONTINUE;
 }
 

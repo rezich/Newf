@@ -1,0 +1,18 @@
+<html><head><title>%{site_title} — %{page_title}</title></head>
+<body>
+<div id="main">
+    <div id="header">
+        <h1><a href="/">%{site_title}</a></h1>
+        <ul id="nav_main">
+            <!--<li><a href="/newest">Newest</a></li>-->
+            <li><a href="/submit">Submit</a></li>
+        </ul>
+        <ul id="nav_user">%{nav_user}</ul>
+    </div>
+    <hr />
+    <div id="body">%{body}</div>
+    <hr />
+    <div id="footer">©%{current_year} %{site_title}</div>
+</div>
+</body>
+</html>
