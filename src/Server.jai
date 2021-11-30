@@ -197,7 +197,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
                             if kv.count == 2 {
                                 if kv[0] == {
                                     case SESSION_TOKEN; load_or_begin_session(kv[1]);
-                                    case UNSEEN_TOASTS_TOKEN; array_add(*res.toasts, kv[1]);
+                                    case UNSEEN_TOASTS_TOKEN; for split(decode_uri_component(kv[1]), UNSEEN_TOASTS_SEPARATOR) array_add(*res.toasts, it);
                                 }
                                 table_add(*req.cookies, kv[0], kv[1]);
                             }
@@ -227,7 +227,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         query_string_begin := find_index_from_left(req.uri.path, #char "?");
         if query_string_begin >= 0 {
             path_without_query_string = slice(req.uri.path, 0, query_string_begin);
-            query_string := decode_url(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
+            query_string := decode_uri_component(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
             req.uri.query = query_string;
             for split(query_string, "&") {
                 second: *string;
@@ -285,7 +285,15 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         for after_plugins it();
 
         // handle unseen toasts
-        if res.toasts.count > 0 && !res.rendered_toasts then Set_Cookie(UNSEEN_TOASTS_TOKEN, res.toasts[0]);
+        if res.toasts.count > 0 && !res.rendered_toasts {
+            builder: String_Builder; defer free_buffers(*builder);
+            first := true;
+            for res.toasts {
+                append(*builder, ifx first then it else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it));
+                if first then first = false;
+            }
+            Set_Cookie(UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
+        }
         else Unset_Cookie(UNSEEN_TOASTS_TOKEN);
 
         response_string := get_http_response_string(*res);

@@ -109,55 +109,68 @@ main :: () {
         Respond(Render("index"));
     });
     // story submission form
-    route(.GET, "/submit", () {
+    route(.GET, "/submit", story_submission_form);
+    story_submission_form :: () {
         Set("page_title", "Submit story");
         Set("body", Render("submit"));
         Respond(Render("index"));
-    });
+    }
     // story submission
     route(.POST, "/submit", () {
         headline, headline_given := Get("headline");
-        if !headline_given then Respond(status=400, body="Did not provide headline.");
+        if !headline_given then Toast("Did not provide headline.");
         body, body_given := Get("body");
-        if !body_given then Respond(status=400, body="Did not provide body.");
+        if !body_given then Toast("Did not provide body.");
+        if !headline_given || !body_given {
+            Set("submission_headline", headline);
+            Set("submission_body", body);
+            Reroute(story_submission_form);
+        }
         id := add_story(headline, body);
         Redirect("/story/%", id);
     });
     // user login form
-    route(.GET, "/login", () {
+    route(.GET, "/login", login_form);
+    login_form :: () {
         Set("page_title", "Log in");
         Set("body", Render("login"));
         Respond(Render("index"));
-    });
+    }
     // user login
     route(.POST, "/login", () {
         name, name_given := Get("name");
-        if !name_given then Respond(status=400, body="Did not provide name.");
+        if !name_given then {
+            Toast("No user name provided.");
+            Reroute(login_form);
+        }
         user, user_exists := get_user(name);
-        if !user_exists then Respond(status=400, body="User does not exist.");
+        if !user_exists {
+            Toast("User does not exist.");
+            Reroute(login_form);
+        }
         Set_Session("user_id", user.id);
-        Toast("SUCCESS");
+        Toast("Logged in successfully. 😀");
         Redirect("/");
     });
     // user logout
     route(.GET, "/logout", () {
         end_session();
-        Toast("SUCCESS");
+        Toast("Logged out successfully.");
+        Toast("Testing a second toast.");
         Redirect("/");
     });
     // catch-all 404
     route(.GET, "*", "*", not_found);
-
-
-    listen(8000);
-
-
     not_found :: () {
         Set("page_title", "page not found");
         Set("body", Render("404"));
         Respond(Render("index"), status=404);
     }
-    /*login_form :: () {}*/
+
+
+    listen(8000);
+
+
     json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 }
 

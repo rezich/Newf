@@ -279,7 +279,7 @@ end_session :: () {
 Get :: (key: string) -> value: string = "", success: bool = true #must {
     value, success := table_find(context.request.params, key);
     if !success return success = false;
-    return value;
+    return value, success = value != "";
 }
 Get_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     string_value, key_success := table_find(context.request.params, key);
@@ -291,11 +291,12 @@ Get_Int :: (key: string) -> value: int = -1, success: bool = true #must {
 Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must {
     value, success := table_find(context.request.cookies, key);
     if !success return success = false;
-    return value;
+    return decode_uri_component(value), success = value != "";
 }
 Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     string_value, key_success := table_find(context.request.cookies, key);
     if !key_success return success = false;
+    string_value = decode_uri_component(string_value);
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
@@ -316,7 +317,7 @@ Get_Session :: (key: string) -> value: string = "", success: bool = true #must {
     if !context.response.session return success = false;
     value, success := table_find(context.response.session.params, key);
     if !success return success = false;
-    return value;
+    return value, success = value != "";
 }
 Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     if !context.response.session return success = false;
@@ -332,9 +333,11 @@ Set :: (key: string, value: string) {
 }
 Set_Cookie :: (key: string, value: Any) { Set_Cookie(key, tprint("%", value)); }
 Set_Cookie :: (key: string, value: string) {
-    table_set(*context.response.cookies, key, value);
+    table_set(*context.response.cookies, key, encode_uri_component(value));
 }
-Unset_Cookie :: (key: string) { Set_Cookie(key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT"); }
+Unset_Cookie :: (key: string) {
+    table_set(*context.response.cookies, key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT");
+}
 Set_Header :: (key: string, value: Any) { Set_Header(tprint("%", value)); }
 Set_Header :: (key: string, value: string) {
     table_set(*context.response.headers, key, value);
@@ -389,7 +392,7 @@ Render :: (template_name: string, args: ..Any) -> string #must {
                         found = true;
                     }
                 }
-                append(*builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
+                append(*builder, ifx found then value else ""); // blank if nonexistent might not be the Right Thing To Do, we'll see...
         }
     }
     return builder_to_string(*builder);
@@ -424,7 +427,39 @@ bucket_array_find_pointer :: (using array: *Bucket_Array, locator: Bucket_Locato
     result := *bucket.data[locator.slot_index];
     return result;
 }
-decode_url :: (text: string) -> string {
+encode_uri_component :: (text: string) -> string {
+    new_context := context;
+    push_context new_context {
+        builder: String_Builder; defer free_buffers(*builder);
+        format_int := *context.print_style.default_format_int;
+        format_int.base = 16;
+        format_int.minimum_digits = 2;
+        for 0..text.count-1 {
+            if should_encode(text[it]) then append(*builder, tprint("%%%1", text[it]));
+            else append(*builder, text[it]);
+        }
+        return builder_to_string(*builder);
+        
+        should_encode :: (char: u8) -> bool {
+            if
+                (char >= #char "A" && char <= #char "Z") ||
+                (char >= #char "a" && char <= #char "z") ||
+                (char >= #char "0" && char <= #char "9") ||
+                char == #char "-" ||
+                char == #char "_" ||
+                char == #char "." ||
+                char == #char "!" ||
+                char == #char "~" ||
+                char == #char "*" ||
+                char == #char "'" ||
+                char == #char "(" ||
+                char == #char ")"
+            return false;
+            return true;
+        }
+    }
+}
+decode_uri_component :: (text: string) -> string {
     builder: String_Builder; defer free_buffers(*builder);
     str := text;
     while str != "" {
@@ -453,7 +488,7 @@ decode_url :: (text: string) -> string {
 decode_form :: (text: string) -> string {
     str := text;
     replace_chars(str, "+", #char " ");
-    return decode_url(str);
+    return decode_uri_component(str);
 }
 is_hex_number :: inline (c: u32) -> bool {
     return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_number(c);
