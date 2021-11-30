@@ -74,7 +74,7 @@ main :: () {
     add_user("admin");
 
 
-    before_route((req: *Request, res: *Response) {
+    before_route(() {
         Set("current_year", 2021);
         Set("site_title", "News");
         current_user_id, logged_in := Get_Session_Int("user_id");
@@ -89,14 +89,14 @@ main :: () {
 
 
     // homepage
-    route(.GET, "/", (req: *Request, res: *Response) {
+    route(.GET, "/", () {
         Set("page_title", "Homepage");
         Set("stories", Render_Each(stories, #code Render_It("story/header", it.id, it.headline)));
         Set("body", Render("home"));
         Respond(Render("index"));
     });
     // story detail
-    route(.GET, "/story/:id", (req: *Request, res: *Response) {
+    route(.GET, "/story/:id", () {
         id, id_valid := Get_Int("id");
         if !id_valid then Reroute(not_found);
         story, story_exists := get_story(id);
@@ -109,13 +109,13 @@ main :: () {
         Respond(Render("index"));
     });
     // story submission form
-    route(.GET, "/submit", (req: *Request, res: *Response) {
+    route(.GET, "/submit", () {
         Set("page_title", "Submit story");
         Set("body", Render("submit"));
         Respond(Render("index"));
     });
     // story submission
-    route(.POST, "/submit", (req: *Request, res: *Response) {
+    route(.POST, "/submit", () {
         headline, headline_given := Get("headline");
         if !headline_given then Respond(status=400, body="Did not provide headline.");
         body, body_given := Get("body");
@@ -124,13 +124,13 @@ main :: () {
         Redirect("/story/%", id);
     });
     // user login form
-    route(.GET, "/login", (req: *Request, res: *Response) {
+    route(.GET, "/login", () {
         Set("page_title", "Log in");
         Set("body", Render("login"));
         Respond(Render("index"));
     });
     // user login
-    route(.POST, "/login", (req: *Request, res: *Response) {
+    route(.POST, "/login", () {
         name, name_given := Get("name");
         if !name_given then Respond(status=400, body="Did not provide name.");
         user, user_exists := get_user(name);
@@ -139,8 +139,8 @@ main :: () {
         Redirect("/");
     });
     // user logout
-    route(.GET, "/logout", (req: *Request, res: *Response) {
-        end_session(req, res);
+    route(.GET, "/logout", () {
+        end_session();
         Redirect("/");
     });
     // catch-all 404
@@ -150,12 +150,12 @@ main :: () {
     listen(8000);
 
 
-    not_found :: (req: *Request, res: *Response) {
+    not_found :: () {
         Set("page_title", "page not found");
         Set("body", Render("404"));
         Respond(Render("index"), status=404);
     }
-    /*login_form :: (req: *Request, res: *Response) {}*/
+    /*login_form :: () {}*/
     json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 }
 

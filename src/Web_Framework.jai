@@ -24,11 +24,12 @@ Request :: struct {
         subdomain: string;
     }
     form_data: Table(string, string);
-    session: *Session;
     cookies: Cookies;
     raw: string;
     params: Table(string, string);
 }
+
+#add_context request: *Request = null;
 
 uninit :: (using req: *Request) {
     uninit(*uri.headers);
@@ -55,34 +56,27 @@ Response :: struct {
     Toast :: #type string;
 }
 
+#add_context response: *Response = null;
+
 uninit :: (using res: *Response) {
     uninit(*headers);
     uninit(*cookies);
 }
 //------------------------------------------------------------------------------
 // Plugin
-Plugin_Proc :: #type (req: *Request, res: *Response);
-Before_Plugin_Proc :: #type Plugin_Proc;
-After_Plugin_Proc :: #type Plugin_Proc;
+before_plugins: [..] ();
+after_plugins: [..] ();
 
-before_plugins: [..] Before_Plugin_Proc;
-after_plugins: [..] After_Plugin_Proc;
-
-before_route :: inline (proc: Before_Plugin_Proc) {
-    array_add(*before_plugins, proc);
-}
-after_route :: inline (proc: After_Plugin_Proc) {
-    array_add(*after_plugins, proc);
-}
+before_route :: inline (proc: ()) { array_add(*before_plugins, proc); }
+after_route :: inline (proc: ()) { array_add(*after_plugins, proc); }
 //------------------------------------------------------------------------------
 // Route
 ROUTE_PATH_SEPARATORS :: "/";
-Route_Proc :: #type (*Request, *Response);
 //#scope_file
 Route :: struct {
     method: Request_Method;
     subdomain: string;
-    response: Route_Proc;
+    response: ();
     stretches: [..] Stretch;
     params: [..] string;
 
@@ -101,8 +95,8 @@ Route :: struct {
 routes: [..] Route;
 routes_match_subdomains := false;
 
-route :: (method: Request_Method, path: string, response: Route_Proc) { route(method, "", path, response); }
-route :: (method: Request_Method, subdomain: string, path: string, response: Route_Proc) {
+route :: (method: Request_Method, path: string, response: ()) { route(method, "", path, response); }
+route :: (method: Request_Method, subdomain: string, path: string, response: ()) {
     if subdomain != "" then routes_match_subdomains = true;
     r: Route;
     r.method = method;
@@ -254,106 +248,100 @@ Session :: struct {
 sessions: Table(Session.TOKEN, *Session);
 session_storage: Bucket_Array(Session, SESSIONS_PER_BUCKET, true);
 
-begin_session :: (req: *Request, res: *Response) { //TODO: probably remove session from req
-    if !req.session {
+begin_session :: () {
+    if !context.response.session {
         session: Session;
         session.token = md5(tprint("%", get_time())); //TODO: lol
         session.locator = bucket_array_add(*session_storage, session);
-        req.session = bucket_array_find_pointer(*session_storage, session.locator);
-        res.session = req.session;
-        table_add(*sessions, session.token, req.session);
+        context.response.session = bucket_array_find_pointer(*session_storage, session.locator);
+        table_add(*sessions, session.token, context.response.session);
         Set_Cookie(SESSION_TOKEN, session.token);
     }
 }
-load_or_begin_session :: (req: *Request, res: *Response, token: Session.TOKEN) {
+load_or_begin_session :: (token: Session.TOKEN) {
     existing, found := table_find(sessions, token);
     if found && existing {
-        req.session = existing;
-        res.session = existing;
+        context.response.session = existing;
         Set_Cookie(SESSION_TOKEN, existing.token);
     }
-    else begin_session(req, res);
+    else begin_session();
 }
-end_session :: (req: *Request, res: *Response) {
-    if req.session == null return;
-    table_remove(*sessions, req.session.token);
-    bucket_array_remove(*session_storage, req.session.locator);
-    req.session = null;
-    res.session = null;
+end_session :: () {
+    if context.response.session == null return;
+    table_remove(*sessions, context.response.session.token);
+    bucket_array_remove(*session_storage, context.response.session.locator);
+    context.response.session = null;
     Unset_Cookie(SESSION_TOKEN);
 }
 //------------------------------------------------------------------------------
-// Macros
-Get :: (key: string) -> value: string = "", success: bool = true #must #expand {
-    value, success := table_find(`req.params, key);
+// API
+Get :: (key: string) -> value: string = "", success: bool = true #must {
+    value, success := table_find(context.request.params, key);
     if !success return success = false;
     return value;
 }
-Get_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
-    string_value, key_success := table_find(`req.params, key);
+Get_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+    string_value, key_success := table_find(context.request.params, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must #expand {
-    value, success := table_find(`req.cookies, key);
+Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must {
+    value, success := table_find(context.request.cookies, key);
     if !success return success = false;
     return value;
 }
-Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
-    string_value, key_success := table_find(`req.cookies, key);
+Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+    string_value, key_success := table_find(context.request.cookies, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Get_Header :: (key: string) -> value: string = "", success: bool = true #must #expand {
-    value, success := table_find(`req.uri.headers, key);
+Get_Header :: (key: string) -> value: string = "", success: bool = true #must{
+    value, success := table_find(context.request.uri.headers, key);
     if !success return success = false;
     return value;
 }
-Get_Header_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
-    string_value, key_success := table_find(`req.uri.headers, key);
+Get_Header_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+    string_value, key_success := table_find(context.request.uri.headers, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Get_Session :: (key: string) -> value: string = "", success: bool = true #must #expand {
-    req := `req;
-    if !req.session return success = false;
-    value, success := table_find(req.session.params, key);
+Get_Session :: (key: string) -> value: string = "", success: bool = true #must {
+    if !context.response.session return success = false;
+    value, success := table_find(context.response.session.params, key);
     if !success return success = false;
     return value;
 }
-Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must #expand {
-    req := `req;
-    if !req.session return success = false;
-    string_value, key_success := table_find(req.session.params, key);
+Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+    if !context.response.session return success = false;
+    string_value, key_success := table_find(context.response.session.params, key);
     if !key_success return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Set :: (key: string, value: Any) #expand { req := `req; Set(key, tprint("%", value)); }
-Set :: (key: string, value: string) #expand {
-    table_set(*`req.params, key, value);
+Set :: (key: string, value: Any) { Set(key, tprint("%", value)); }
+Set :: (key: string, value: string) {
+    table_set(*context.request.params, key, value);
 }
-Set_Cookie :: (key: string, value: Any) #expand { req, res := `req, `res; Set_Cookie(key, tprint("%", value)); }
-Set_Cookie :: (key: string, value: string) #expand {
-    table_set(*`res.cookies, key, value);
+Set_Cookie :: (key: string, value: Any) { Set_Cookie(key, tprint("%", value)); }
+Set_Cookie :: (key: string, value: string) {
+    table_set(*context.response.cookies, key, value);
 }
-Unset_Cookie :: (key: string) #expand { req, res := `req; `res; Set_Cookie(key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT"); }
-Set_Header :: (key: string, value: Any) #expand { req := `req; Set_Header(tprint("%", value)); }
-Set_Header :: (key: string, value: string) #expand {
-    table_set(*`res.headers, key, value);
+Unset_Cookie :: (key: string) { Set_Cookie(key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT"); }
+Set_Header :: (key: string, value: Any) { Set_Header(tprint("%", value)); }
+Set_Header :: (key: string, value: string) {
+    table_set(*context.response.headers, key, value);
 }
-Set_Session :: (key: string, value: Any) #expand { req, res, sessions, session_storage := `req, `res, `sessions, `session_storage; Set_Session(key, tprint("%", value)); }
-Set_Session :: (key: string, value: string) #expand {
-    req, res, sessions, session_storage := `req, `res, `sessions, `session_storage;
-    begin_session(req, res);
-    table_set(*req.session.params, key, value);
+Set_Session :: (key: string, value: Any) { Set_Session(key, tprint("%", value)); }
+Set_Session :: (key: string, value: string) {
+    begin_session();
+    table_set(*context.response.session.params, key, value);
 }
 Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
     content_type_string: string;
@@ -361,27 +349,23 @@ Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: 
         case .HTML; content_type_string = "text/html; charset=utf-8";
         case .JSON; content_type_string = "text/json; charset=utf-8";
     }
-    res := `res;
     Set_Header("Content-Type", content_type_string);
-    res.body = body;
-    res.status = 200;
+    context.response.body = body;
+    context.response.status = 200;
     `return;
 }
 Redirect :: (to: string, args: ..Any) #expand {
     _to := "";
     if args.count > 0 then _to = tprint(to, ..args); else _to = to;
-    res := `res;
-    res.status = 302;
+    context.response.status = 302;
     Set_Header("Location", _to);
     `return;
 }
-Reroute :: (to: (req: *Request, res: *Response)) #expand {
-    req, res := `req, `res;
-    to(req, res);
+Reroute :: (to: ()) #expand { //TODO: remove
+    to();
     `return;
 }
-Render :: (template_name: string, args: ..Any) -> string #must #expand {
-    req, res := `req, `res;
+Render :: (template_name: string, args: ..Any) -> string #must {
     template := table_find_pointer(templates, template_name);
     if !template return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
     if args.count > 0 && args.count != template.params.count {
@@ -407,24 +391,16 @@ Render :: (template_name: string, args: ..Any) -> string #must #expand {
     return builder_to_string(*builder);
 }
 Render_Each :: (items: $T, code: Code) -> string #expand {
-    req, res := `req, `res;
     builder: String_Builder; defer free_buffers(*builder);
-    for items {
-        #insert_internal code;
-    }
+    for items { #insert_internal code; }
     return builder_to_string(*builder);
 
     Render_It :: (template_name: string, args: ..Any) #expand {
-        req, res := `req, `res;
         append(*`builder, Render(template_name, ..args));
     }
 }
-Render_Toasts :: (template_name: string) #expand {
-    req, res := `req, `res;
-    ;
-}
-Toast :: (message: string) #expand {
-    array_add(*`res.toasts, message);
+Toast :: (message: string) {
+    array_add(*context.response.toasts, message);
 }
 /*Route :: (method: Request_Method, path: string, code: Code) #expand {
     route(method, path, (req: *Request, res: *Response) {
