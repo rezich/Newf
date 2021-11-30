@@ -274,6 +274,9 @@ end_session :: () {
     context.response.session = null;
     Unset_Cookie(SESSION_TOKEN);
 }
+in_session :: () -> bool {
+    return context.response.session != null;
+}
 //------------------------------------------------------------------------------
 // API
 Get :: (key: string) -> value: string = "", success: bool = true #must {
@@ -283,7 +286,7 @@ Get :: (key: string) -> value: string = "", success: bool = true #must {
 }
 Get_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     string_value, key_success := table_find(context.request.params, key);
-    if !key_success return success = false;
+    if !key_success || string_value == "" return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
@@ -295,7 +298,7 @@ Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must {
 }
 Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     string_value, key_success := table_find(context.request.cookies, key);
-    if !key_success return success = false;
+    if !key_success || string_value == "" return success = false;
     string_value = decode_uri_component(string_value);
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
@@ -308,7 +311,7 @@ Get_Header :: (key: string) -> value: string = "", success: bool = true #must{
 }
 Get_Header_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     string_value, key_success := table_find(context.request.uri.headers, key);
-    if !key_success return success = false;
+    if !key_success || string_value == "" return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
@@ -322,7 +325,7 @@ Get_Session :: (key: string) -> value: string = "", success: bool = true #must {
 Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     if !context.response.session return success = false;
     string_value, key_success := table_find(context.response.session.params, key);
-    if !key_success return success = false;
+    if !key_success || string_value == "" return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
@@ -409,16 +412,6 @@ Render_Each :: (items: $T, code: Code) -> string #expand {
 Toast :: (message: string) {
     array_add(*context.response.toasts, message);
 }
-/*Route :: (method: Request_Method, path: string, code: Code) #expand {
-    route(method, path, (req: *Request, res: *Response) {
-        #insert_internal code;
-    });
-}
-Route :: (method: Request_Method, subdomain: string, path: string, code: Code) #expand {
-    route(method, subdomain, path, (req: *Request, res: *Response) {
-        #insert_internal code;
-    });
-}*/
 //------------------------------------------------------------------------------
 // Utils
 bucket_array_find_pointer :: (using array: *Bucket_Array, locator: Bucket_Locator) -> *array.type {
@@ -441,20 +434,13 @@ encode_uri_component :: (text: string) -> string {
         return builder_to_string(*builder);
         
         should_encode :: (char: u8) -> bool {
-            if
-                (char >= #char "A" && char <= #char "Z") ||
+            if  (char >= #char "A" && char <= #char "Z") ||
                 (char >= #char "a" && char <= #char "z") ||
                 (char >= #char "0" && char <= #char "9") ||
-                char == #char "-" ||
-                char == #char "_" ||
-                char == #char "." ||
-                char == #char "!" ||
-                char == #char "~" ||
-                char == #char "*" ||
-                char == #char "'" ||
-                char == #char "(" ||
-                char == #char ")"
-            return false;
+                char == #char "-" || char == #char "_" || char == #char "." ||
+                char == #char "!" || char == #char "~" || char == #char "*" ||
+                char == #char "'" || char == #char "(" || char == #char ")"
+            then return false;
             return true;
         }
     }
@@ -503,6 +489,7 @@ xprint :: (args: ..Any) -> string {
 }
 //------------------------------------------------------------------------------
 #load "Server.jai";
+#load "md5.jai"; // because the official module is broken & will probably be removed anyway
 
 #import "File_Utilities";
 #import "Bucket_Array";
@@ -513,4 +500,3 @@ xprint :: (args: ..Any) -> string {
 #import "String";
 #import "Basic";
 #import "File";
-#import "md5";

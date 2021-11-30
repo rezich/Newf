@@ -48,10 +48,11 @@ add_vote :: (user: User, story: Story, score: Story.Score) {
     array_add(*votes, vote);
 }
 
-add_user :: (name: string) -> User.ID {
+add_user :: (name: string, password: string) -> User.ID {
     user: User;
     user.id = users.count + 1;
     user.name = name;
+    user.password_hash = md5(password);
     array_add(*users, user);
     return user.id;
 }
@@ -66,12 +67,16 @@ get_user :: (name: string) -> user: *User = null, exists: bool = true {
     return user;
 }
 
+// not every website makes the following equivalence, but this one does, because
+// we only use sessions for logged-in users
+logged_in :: () => in_session();
+
 
 main :: () {
     init_template_system();
 
 
-    add_user("admin");
+    add_user("admin", "hunter2");
 
 
     before_route(() {
@@ -111,6 +116,10 @@ main :: () {
     // story submission form
     route(.GET, "/submit", story_submission_form);
     story_submission_form :: () {
+        if !logged_in() {
+            Toast("You must be logged in to submit a story.");
+            Redirect("/login");
+        }
         Set("page_title", "Submit story");
         Set("body", Render("submit"));
         Respond(Render("index"));
@@ -129,6 +138,16 @@ main :: () {
         id := add_story(headline, body);
         Redirect("/story/%", id);
     });
+    // user page
+    route(.GET, "/user/:name", () {
+        name, _ := Get("name");
+        user, user_exists := get_user(name);
+        if !user_exists then Reroute(not_found);
+        Set("user_name", user.name);
+        Set("user_submission", "TODO");
+        Set("user_comments", "TODO");
+        Respond(Render("user"));
+    });
     // user login form
     route(.GET, "/login", login_form);
     login_form :: () {
@@ -139,13 +158,24 @@ main :: () {
     // user login
     route(.POST, "/login", () {
         name, name_given := Get("name");
-        if !name_given then {
+        if !name_given {
             Toast("No user name provided.");
             Reroute(login_form);
         }
         user, user_exists := get_user(name);
         if !user_exists {
             Toast("User does not exist.");
+            Reroute(login_form);
+        }
+        password, password_given := Get("password");
+        if !password_given {
+            Toast("No password provided.");
+            Set("login_name", name);
+            Reroute(login_form);
+        }
+        if md5(password) != user.password_hash {
+            Toast("Invalid password.");
+            Set("login_name", name);
             Reroute(login_form);
         }
         Set_Session("user_id", user.id);
@@ -156,7 +186,7 @@ main :: () {
     route(.GET, "/logout", () {
         end_session();
         Toast("Logged out successfully.");
-        Toast("Testing a second toast.");
+        Toast("Please come again.");
         Redirect("/");
     });
     // catch-all 404
@@ -169,9 +199,6 @@ main :: () {
 
 
     listen(8000);
-
-
-    json_error :: x => tprint("{ \"error:\" \"%\" }", x);
 }
 
 #import "Web_Framework";

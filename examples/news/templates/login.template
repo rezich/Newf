@@ -1,5 +1,6 @@
 <h2>Log in</h2>
 <form action="/login" method="post">
-    <label for="login_name">Name:&nbsp;</label><input name="name" id="login_name" /><br />
+    <label for="login_name">Name:&nbsp;</label><input name="name" id="login_name" value="%{login_name}" /><br />
+    <label for="login_password">Password:&nbsp;</label><input name="password" id="login_password" type="password" /><br />
     <input type="submit" value="Submit" />
 </form>
