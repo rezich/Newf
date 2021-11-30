@@ -35,6 +35,9 @@ get_story :: (id: Story.ID) -> story: *Story = null, exists: bool = true {
     if id-1 >= stories.count return exists = false;
     return *stories[id-1];
 }
+list_stories :: () -> [] *Story {
+    return .[];
+}
 
 add_vote :: (user: User, story: Story, score: Story.Score) {
     vote: Vote;

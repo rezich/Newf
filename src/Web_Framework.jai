@@ -50,6 +50,9 @@ Response :: struct {
     body: string;
     status: HTTP_Status;
     session: *Session;
+    toasts: [..] Toast;
+
+    Toast :: #type string;
 }
 
 uninit :: (using res: *Response) {
@@ -393,6 +396,11 @@ Render :: (template_name: string, args: ..Any) -> string #must #expand {
             case .PARAM;
                 param_name := template.params[it.param_id];
                 value, found := Get(param_name);
+                /*if !res.rendered_toasts && param_name == "toasts" {
+                    _, toast_template_exists := table_find(templates, TOAST_TEMPLATE_NAME);
+                    res.rendered_toasts = true;
+                    if toast_template_exists then value = Render_Each(res.toasts, #code Render_It(TOAST_TEMPLATE_NAME, it));
+                }*/
                 append(*builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
         }
     }
@@ -410,6 +418,13 @@ Render_Each :: (items: $T, code: Code) -> string #expand {
         req, res := `req, `res;
         append(*`builder, Render(template_name, ..args));
     }
+}
+Render_Toasts :: (template_name: string) #expand {
+    req, res := `req, `res;
+    ;
+}
+Toast :: (message: string) #expand {
+    array_add(*`res.toasts, message);
 }
 /*Route :: (method: Request_Method, path: string, code: Code) #expand {
     route(method, path, (req: *Request, res: *Response) {

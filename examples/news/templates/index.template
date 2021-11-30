@@ -7,10 +7,18 @@
             <!--<li><a href="/newest">Newest</a></li>-->
             <li><a href="/submit">Submit</a></li>
         </ul>
-        <ul id="nav_user">%{nav_user}</ul>
+        <ul id="nav_user">
+%{nav_user}
+        </ul>
     </div>
     <hr />
-    <div id="body">%{body}</div>
+    <div id="toasts">
+%{toasts}
+    </div>
+    <hr />
+    <div id="body">
+%{body}
+    </div>
     <hr />
     <div id="footer">©%{current_year} %{site_title}</div>
 </div>
