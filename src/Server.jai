@@ -195,7 +195,10 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
                         for split(kv[1], "; ") {
                             kv := split(it, "=");
                             if kv.count == 2 {
-                                if kv[0] == SESSION_TOKEN then load_or_begin_session(kv[1]);
+                                if kv[0] == {
+                                    case SESSION_TOKEN; load_or_begin_session(kv[1]);
+                                    case UNSEEN_TOASTS_TOKEN; array_add(*res.toasts, kv[1]);
+                                }
                                 table_add(*req.cookies, kv[0], kv[1]);
                             }
                         }
@@ -281,11 +284,14 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         if proc then proc(); else log("No proc...?\n");
         for after_plugins it();
 
-        for 0..BUFFER_SIZE buffer[it] = 0;
+        // handle unseen toasts
+        if res.toasts.count > 0 && !res.rendered_toasts then Set_Cookie(UNSEEN_TOASTS_TOKEN, res.toasts[0]);
+        else Unset_Cookie(UNSEEN_TOASTS_TOKEN);
 
-        response := get_http_response_string(*res);
-        buffer_length = cast(s32) response.count;
-        memcpy(buffer.data, response.data, buffer_length);
+        response_string := get_http_response_string(*res);
+        buffer_length = cast(s32) response_string.count;
+        for 0..BUFFER_SIZE buffer[it] = 0;
+        memcpy(buffer.data, response_string.data, buffer_length);
         buffer[buffer_length] = 0;
         if send(client.socket, buffer.data, buffer_length, 0) < 0 log("ERROR");
     }

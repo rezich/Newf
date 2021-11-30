@@ -52,6 +52,7 @@ Response :: struct {
     status: HTTP_Status;
     session: *Session;
     toasts: [..] Toast;
+    rendered_toasts: bool;
 
     Toast :: #type string;
 }
@@ -380,11 +381,14 @@ Render :: (template_name: string, args: ..Any) -> string #must {
             case .PARAM;
                 param_name := template.params[it.param_id];
                 value, found := Get(param_name);
-                /*if !res.rendered_toasts && param_name == "toasts" {
+                if !context.response.rendered_toasts && param_name == "toasts" {
                     _, toast_template_exists := table_find(templates, TOAST_TEMPLATE_NAME);
-                    res.rendered_toasts = true;
-                    if toast_template_exists then value = Render_Each(res.toasts, #code Render_It(TOAST_TEMPLATE_NAME, it));
-                }*/
+                    if toast_template_exists {
+                        context.response.rendered_toasts = true;
+                        value = Render_Each(context.response.toasts, #code Render_It(TOAST_TEMPLATE_NAME, it));
+                        found = true;
+                    }
+                }
                 append(*builder, ifx found then value else tprint("[!! MISSING PARAM: % !!]", param_name));
         }
     }

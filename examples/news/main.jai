@@ -136,11 +136,13 @@ main :: () {
         user, user_exists := get_user(name);
         if !user_exists then Respond(status=400, body="User does not exist.");
         Set_Session("user_id", user.id);
+        Toast("SUCCESS");
         Redirect("/");
     });
     // user logout
     route(.GET, "/logout", () {
         end_session();
+        Toast("SUCCESS");
         Redirect("/");
     });
     // catch-all 404
