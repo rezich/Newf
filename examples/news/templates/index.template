@@ -6,6 +6,9 @@ html {
 body {
     margin: 0;
 }
+h1, h2 {
+    margin: 0.5em 0;
+}
 .main {
     max-width: 800px;
     margin: 0 auto;
@@ -43,6 +46,16 @@ body {
 }
 .footer {
     color: #777;
+}
+form {
+    width: 325px;
+}
+form > div {
+    display: flex;
+    justify-content: space-between;
+}
+.unvisited:visited {
+    color: blue;
 }
 
 </style></head><body><!-------------------------------------------------------->

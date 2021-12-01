@@ -4,7 +4,7 @@ Comment :: struct {
     id: ID; ID :: #type int;
     story_id: Story.ID;
     parent_id: Comment.ID;
-    user_id: User.ID;
+    commenter_id: User.ID;
     body: string;
 }
 Story :: struct {
@@ -21,7 +21,7 @@ User :: struct {
 }
 Vote :: struct {
     id: ID; ID :: #type int;
-    user_id: User.ID;
+    voter_id: User.ID;
     story_id: Story.ID;
     score: Story.Score;
 }
@@ -67,7 +67,7 @@ votes: [..] Vote;
 Vote_insert :: (user: User, story: Story, score: Story.Score) {
     vote: Vote;
     vote.id = votes.count + 1;
-    vote.user_id = user.id;
+    vote.voter_id = user.id;
     vote.story_id = story.id;
     vote.score = score;
     array_add(*votes, vote);
@@ -93,8 +93,9 @@ main :: () {
 
 
     before_route(() {
-        set("current_year", 2021);
-        set("site_title", "News");
+        year := filetime_to_localtime(get_current_file_time());
+        set("current_year", year);
+        set("site_title", "Something News");
         current_user_id, logged_in := get_session_int("user_id");
         if logged_in {
             current_user, current_user_exists := User_get(current_user_id);
@@ -151,7 +152,7 @@ main :: () {
         toast("Story was submitted successfully.");
         redirect("/story/%", id);
     });
-    // user page
+    // user detail
     route(.GET, "/user/:name", () {
         name, _ := get("name");
         user, user_exists := User_get(name);
@@ -163,7 +164,11 @@ main :: () {
             #code { render_it("story/header", it.id, it.headline); },
             "<em>This user has not submitted any stories.</em>"
         ));
-        set("user_comments", "TODO");
+        set("user_comments", render_each(
+            Select_From(comments, where=(x)=>x.commenter_id==get_int("user_id")),
+            #code { /* TODO */ },
+            "<em>This user has not posted any comments.</em>"
+        ));
         respond_index(tprint("user %", user.name), render("user"));
     });
     // user login form
@@ -198,7 +203,7 @@ main :: () {
     });
     // user register form
     route(.GET, "/register", register_form);
-    register_form :: () { respond_index("Register", render("register")); }
+    register_form :: () { respond_index("Register account", render("register")); }
     // user register
     route(.POST, "/register", () {
         name, name_given := get("name");
@@ -252,3 +257,4 @@ main :: () {
 #import "Web_Framework";
 #import "Hash_Table";
 #import "Basic";
+#import "Time";

@@ -1,6 +1,6 @@
 <h2>Submit story</h2>
 <form action="/submit" method="post">
-    <label for="submit_headline">Headline:&nbsp;</label><input name="headline" id="submit_headline" value="%{submission_headline}" /><br />
-    <label for="submit_body">Body text:&nbsp;</label><input name="body" id="submit_body" value="%{submission_body}" /><br />
-    <input type="submit" value="Submit" />
+    <div><label for="submit_headline">Headline:</label><input name="headline" id="submit_headline" value="%{submission_headline}" /></div>
+    <div><label for="submit_body">Body text:</label><input name="body" id="submit_body" value="%{submission_body}" /></div>
+    <input type="submit" value="Submit" /><div>&nbsp;</div>
 </form>
