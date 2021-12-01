@@ -211,7 +211,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
                         key := decode_form(kv[0]);
                         value := decode_form(kv[1]);
                         table_set(*req.form_data, key, value);
-                        Set(key, value);
+                        set(key, value);
                     }
                 }
             }
@@ -237,7 +237,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
                     case 2; second = *kv[1];
                 }
                 table_set(*req.uri.query_params, kv[0], <<second);
-                Set(kv[0], <<second);
+                set(kv[0], <<second);
             }
         }
         else path_without_query_string = req.uri.path;
@@ -277,7 +277,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         }
 
         // set builtin params
-        Set("HOSTNAME", HOSTNAME);
+        set("HOSTNAME", HOSTNAME);
 
         // process client
         for before_plugins it();
@@ -292,9 +292,9 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
                 append(*builder, ifx first then it else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it));
                 if first then first = false;
             }
-            Set_Cookie(UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
+            set_cookie(UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
         }
-        else Unset_Cookie(UNSEEN_TOASTS_TOKEN);
+        else unset_cookie(UNSEEN_TOASTS_TOKEN);
 
         response_string := get_http_response_string(*res);
         buffer_length = cast(s32) response_string.count;

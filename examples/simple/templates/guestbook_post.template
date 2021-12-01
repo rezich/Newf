@@ -1,2 +1,0 @@
-<a href="/guestbook/%{id}"><h2>Post #%{id}</h2></a>
-<p>%{post_body}</p>

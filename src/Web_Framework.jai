@@ -27,6 +27,7 @@ Request :: struct {
     cookies: Cookies;
     raw: string;
     params: Table(string, string);
+    finished_routing: bool;
 }
 
 #add_context request: *Request = null;
@@ -171,8 +172,9 @@ Template :: struct {
 }
 
 templates: Table(string, Template);
+templates_initialized: bool;
 
-init_template_system :: (relative_template_path: string = "/templates", extension: string = ".template") {
+init_templates :: (relative_template_path: string = "/templates", extension: string = ".template") {
     working_directory := get_working_directory();
     template_path := tprint("%1%2", working_directory, relative_template_path);
     list := file_list(template_path, true);
@@ -256,14 +258,14 @@ begin_session :: () {
         session.locator = bucket_array_add(*session_storage, session);
         context.response.session = bucket_array_find_pointer(*session_storage, session.locator);
         table_add(*sessions, session.token, context.response.session);
-        Set_Cookie(SESSION_TOKEN, session.token);
+        set_cookie(SESSION_TOKEN, session.token);
     }
 }
 load_or_begin_session :: (token: Session.TOKEN) {
     existing, found := table_find(sessions, token);
     if found && existing {
         context.response.session = existing;
-        Set_Cookie(SESSION_TOKEN, existing.token);
+        set_cookie(SESSION_TOKEN, existing.token);
     }
     else begin_session();
 }
@@ -272,31 +274,31 @@ end_session :: () {
     table_remove(*sessions, context.response.session.token);
     bucket_array_remove(*session_storage, context.response.session.locator);
     context.response.session = null;
-    Unset_Cookie(SESSION_TOKEN);
+    unset_cookie(SESSION_TOKEN);
 }
 in_session :: () -> bool {
     return context.response.session != null;
 }
 //------------------------------------------------------------------------------
 // API
-Get :: (key: string) -> value: string = "", success: bool = true #must {
+get :: (key: string) -> value := "", success := true {
     value, success := table_find(context.request.params, key);
     if !success return success = false;
     return value, success = value != "";
 }
-Get_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+get_int :: (key: string) -> value := -1, success: bool=true {
     string_value, key_success := table_find(context.request.params, key);
     if !key_success || string_value == "" return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Get_Cookie :: (key: string) -> value: string = "", success: bool = true #must {
+get_cookie :: (key: string) -> value := "", success := true {
     value, success := table_find(context.request.cookies, key);
     if !success return success = false;
     return decode_uri_component(value), success = value != "";
 }
-Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+get_cookie_int :: (key: string) -> value := -1, success: bool=true {
     string_value, key_success := table_find(context.request.cookies, key);
     if !key_success || string_value == "" return success = false;
     string_value = decode_uri_component(string_value);
@@ -304,25 +306,25 @@ Get_Cookie_Int :: (key: string) -> value: int = -1, success: bool = true #must {
     if !parse_success return success = false;
     return int_value;
 }
-Get_Header :: (key: string) -> value: string = "", success: bool = true #must{
+get_header :: (key: string) -> value := "", success := true {
     value, success := table_find(context.request.uri.headers, key);
     if !success return success = false;
     return value;
 }
-Get_Header_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+get_header_int :: (key: string) -> value := -1, success: bool=true {
     string_value, key_success := table_find(context.request.uri.headers, key);
     if !key_success || string_value == "" return success = false;
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
 }
-Get_Session :: (key: string) -> value: string = "", success: bool = true #must {
+get_session :: (key: string) -> value := "", success := true {
     if !context.response.session return success = false;
     value, success := table_find(context.response.session.params, key);
     if !success return success = false;
     return value, success = value != "";
 }
-Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must {
+get_session_int :: (key: string) -> value := -1, success := true {
     if !context.response.session return success = false;
     string_value, key_success := table_find(context.response.session.params, key);
     if !key_success || string_value == "" return success = false;
@@ -330,55 +332,56 @@ Get_Session_Int :: (key: string) -> value: int = -1, success: bool = true #must 
     if !parse_success return success = false;
     return int_value;
 }
-Set :: (key: string, value: Any) { Set(key, tprint("%", value)); }
-Set :: (key: string, value: string) {
+set :: (key: string, value: Any) { set(key, tprint("%", value)); }
+set :: (key: string, value: string) {
     table_set(*context.request.params, key, value);
 }
-Set_Cookie :: (key: string, value: Any) { Set_Cookie(key, tprint("%", value)); }
-Set_Cookie :: (key: string, value: string) {
+set_cookie :: (key: string, value: Any) { set_cookie(key, tprint("%", value)); }
+set_cookie :: (key: string, value: string) {
     table_set(*context.response.cookies, key, encode_uri_component(value));
 }
-Unset_Cookie :: (key: string) {
+unset_cookie :: (key: string) {
     table_set(*context.response.cookies, key, "INVALID_TOKEN; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 }
-Set_Header :: (key: string, value: Any) { Set_Header(tprint("%", value)); }
-Set_Header :: (key: string, value: string) {
+set_header :: (key: string, value: Any) { set_header(tprint("%", value)); }
+set_header :: (key: string, value: string) {
     table_set(*context.response.headers, key, value);
 }
-Set_Session :: (key: string, value: Any) { Set_Session(key, tprint("%", value)); }
-Set_Session :: (key: string, value: string) {
+set_session :: (key: string, value: Any) { set_session(key, tprint("%", value)); }
+set_session :: (key: string, value: string) {
     begin_session();
     table_set(*context.response.session.params, key, value);
 }
-Respond :: (body: string = "", content_type: HTTP_Content_Type = .HTML, status: HTTP_Status = 200) #expand {
+respond :: (body: string = "", content_type: HTTP_Content_Type=.HTML, status: HTTP_Status=200) #expand {
     content_type_string: string;
     if content_type == {
         case .HTML; content_type_string = "text/html; charset=utf-8";
         case .JSON; content_type_string = "text/json; charset=utf-8";
     }
-    Set_Header("Content-Type", content_type_string);
+    set_header("Content-Type", content_type_string);
     context.response.body = body;
     context.response.status = 200;
     `return;
 }
-Redirect :: (to: string, args: ..Any) #expand {
+redirect :: (to: string, args: ..Any) #expand {
     _to := "";
     if args.count > 0 then _to = tprint(to, ..args); else _to = to;
     context.response.status = 302;
-    Set_Header("Location", _to);
+    set_header("Location", _to);
     `return;
 }
-Reroute :: (to: ()) #expand { //TODO: remove
+reroute :: (to: ()) #expand { //TODO: remove
     to();
     `return;
 }
-Render :: (template_name: string, args: ..Any) -> string #must {
+render :: (template_name: string, args: ..Any) -> string #must {
+    if !templates_initialized init_templates();
     template := table_find_pointer(templates, template_name);
     if !template return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
     if args.count > 0 && args.count != template.params.count {
         return tprint("-- RENDER ARGUMENT ERROR: % --\n", template_name);
     }
-    for args Set(template.params[it_index], it);
+    for args set(template.params[it_index], it);
     builder: String_Builder; defer free_buffers(*builder);
     for template.pieces {
         if it.type == {
@@ -386,12 +389,12 @@ Render :: (template_name: string, args: ..Any) -> string #must {
                 append(*builder, it.text);
             case .PARAM;
                 param_name := template.params[it.param_id];
-                value, found := Get(param_name);
+                value, found := get(param_name);
                 if !context.response.rendered_toasts && param_name == "toasts" {
                     _, toast_template_exists := table_find(templates, TOAST_TEMPLATE_NAME);
                     if toast_template_exists {
                         context.response.rendered_toasts = true;
-                        value = Render_Each(context.response.toasts, #code Render_It(TOAST_TEMPLATE_NAME, it));
+                        value = render_each(context.response.toasts, #code render_it(TOAST_TEMPLATE_NAME, it));
                         found = true;
                     }
                 }
@@ -400,16 +403,17 @@ Render :: (template_name: string, args: ..Any) -> string #must {
     }
     return builder_to_string(*builder);
 }
-Render_Each :: (items: $T, code: Code) -> string #expand {
+render_each :: (items: $T, code: Code, when_empty: string = "") -> string #expand {
+    if !items.count return when_empty;
     builder: String_Builder; defer free_buffers(*builder);
     for items { #insert_internal code; }
     return builder_to_string(*builder);
 
-    Render_It :: (template_name: string, args: ..Any) #expand {
-        append(*`builder, Render(template_name, ..args));
+    render_it :: (template_name: string, args: ..Any) #expand {
+        append(*`builder, render(template_name, ..args));
     }
 }
-Toast :: (message: string) {
+toast :: (message: string) {
     array_add(*context.response.toasts, message);
 }
 //------------------------------------------------------------------------------

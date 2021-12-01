@@ -1,29 +1,36 @@
+//------------------------------------------------------------------------------
+// Models
 Comment :: struct {
     id: ID; ID :: #type int;
     story_id: Story.ID;
     parent_id: Comment.ID;
     user_id: User.ID;
     body: string;
-} comments: [..] Comment;
+}
 Story :: struct {
     id: ID; ID :: #type int;
+    submitter_id: User.ID;
     headline: string;
     body: string;
     score: Score; Score :: #type int;
-} stories: [..] Story;
+}
 User :: struct {
     id: ID; ID :: #type int;
     name: string;
     password_hash: string;
-} users: [..] User;
+}
 Vote :: struct {
     id: ID; ID :: #type int;
     user_id: User.ID;
     story_id: Story.ID;
     score: Story.Score;
-} votes: [..] Vote;
+}
 
-add_story :: (headline: string, body: string) -> Story.ID {
+//------------------------------------------------------------------------------
+// Database (non-persistent)
+comments: [..] Comment;
+stories: [..] Story;
+Story_insert :: (headline: string, body: string) -> Story.ID {
     story: Story;
     story.id = stories.count + 1;
     story.headline = headline;
@@ -31,15 +38,33 @@ add_story :: (headline: string, body: string) -> Story.ID {
     array_add(*stories, story);
     return story.id;
 }
-get_story :: (id: Story.ID) -> story: *Story = null, exists: bool = true {
+Story_get :: (id: Story.ID) -> story: *Story = null, exists: bool = true {
     if id-1 >= stories.count return exists = false;
     return *stories[id-1];
 }
-list_stories :: () -> [] *Story {
-    return .[];
+
+users: [..] User;
+User_insert :: (name: string, password: string) -> User.ID {
+    user: User;
+    user.id = users.count + 1;
+    user.name = name;
+    user.password_hash = md5(password);
+    array_add(*users, user);
+    return user.id;
+}
+User_get :: (id: User.ID) -> user: *User = null, exists: bool = true {
+    if id-1 >= users.count return exists = false;
+    return *users[id-1];
+}
+User_get :: (name: string) -> user: *User = null, exists: bool = true {
+    user: *User = null;
+    for * users if it.name == name { user = it; break; } // I know I know
+    if !user return exists = false;
+    return user;
 }
 
-add_vote :: (user: User, story: Story, score: Story.Score) {
+votes: [..] Vote;
+Vote_insert :: (user: User, story: Story, score: Story.Score) {
     vote: Vote;
     vote.id = votes.count + 1;
     vote.user_id = user.id;
@@ -48,154 +73,181 @@ add_vote :: (user: User, story: Story, score: Story.Score) {
     array_add(*votes, vote);
 }
 
-add_user :: (name: string, password: string) -> User.ID {
-    user: User;
-    user.id = users.count + 1;
-    user.name = name;
-    user.password_hash = md5(password);
-    array_add(*users, user);
-    return user.id;
+Select_From :: (items: [] $T, where: (*T) -> bool=null) -> [..] T {
+    results: [..] T;
+    for items if !where || where(*it) then array_add(*results, it);
+    return results;
 }
-get_user :: (id: User.ID) -> user: *User = null, exists: bool = true {
-    if id-1 >= users.count return exists = false;
-    return *users[id-1];
-}
-get_user :: (name: string) -> user: *User = null, exists: bool = true {
-    user: *User = null;
-    for * users if it.name == name { user = it; break; } // I know I know
-    if !user return exists = false;
-    return user;
-}
+
 
 // not every website makes the following equivalence, but this one does, because
 // we only use sessions for logged-in users
 logged_in :: () => in_session();
 
+// helper function, might not be needed if we change how routing works
+respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
+    set("page_title", page_title);
+    set("body", body);
+    respond(render("index"), status=status);
+}
+
 
 main :: () {
-    init_template_system();
-
-
-    add_user("admin", "hunter2");
+    User_insert("admin", "hunter2");
 
 
     before_route(() {
-        Set("current_year", 2021);
-        Set("site_title", "News");
-        current_user_id, logged_in := Get_Session_Int("user_id");
+        set("current_year", 2021);
+        set("site_title", "News");
+        current_user_id, logged_in := get_session_int("user_id");
         if logged_in {
-            current_user, current_user_exists := get_user(current_user_id);
-            Set("current_user_id", current_user_id);
-            Set("current_user_name", current_user.name);
-            Set("nav_user", Render("nav_user/logged_in"));
+            current_user, current_user_exists := User_get(current_user_id);
+            set("current_user_id", current_user_id);
+            set("current_user_name", current_user.name);
+            set("nav_user", render("nav_user/logged_in"));
         }
-        else Set("nav_user", Render("nav_user/default"));
+        else set("nav_user", render("nav_user/default"));
     });
 
 
     // homepage
     route(.GET, "/", () {
-        Set("page_title", "Homepage");
-        Set("stories", Render_Each(stories, #code Render_It("story/header", it.id, it.headline)));
-        Set("body", Render("home"));
-        Respond(Render("index"));
+        set("stories", render_each(Select_From(stories), #code
+            { render_it("story/header", it.id, it.headline); }, 
+            "<em>There are no stories to display at the moment.</em>"
+        ));
+        respond_index("Homepage", render("home"));
     });
     // story detail
     route(.GET, "/story/:id", () {
-        id, id_valid := Get_Int("id");
-        if !id_valid then Reroute(not_found);
-        story, story_exists := get_story(id);
-        if !story_exists then Reroute(not_found);
-        Set("page_title", story.headline);
-        Set("body", Render("story",
-            Render("story/header", story.id, story.headline),
-            Render("story/body", story.body)
+        id, id_valid := get_int("id");
+        if !id_valid then reroute(not_found);
+        story, story_exists := Story_get(id);
+        if !story_exists then reroute(not_found);
+
+        respond_index(story.headline, render("story",
+            render("story/header", story.id, story.headline),
+            render("story/body", story.body)
         ));
-        Respond(Render("index"));
     });
     // story submission form
     route(.GET, "/submit", story_submission_form);
     story_submission_form :: () {
         if !logged_in() {
-            Toast("You must be logged in to submit a story.");
-            Redirect("/login");
+            toast("You must be logged in to submit a story.");
+            redirect("/login");
         }
-        Set("page_title", "Submit story");
-        Set("body", Render("submit"));
-        Respond(Render("index"));
+        respond_index("Submit story", render("submit"));
     }
     // story submission
     route(.POST, "/submit", () {
-        headline, headline_given := Get("headline");
-        if !headline_given then Toast("Did not provide headline.");
-        body, body_given := Get("body");
-        if !body_given then Toast("Did not provide body.");
+        headline, headline_given := get("headline");
+        if !headline_given then toast("Did not provide headline.");
+        body, body_given := get("body");
+        if !body_given then toast("Did not provide body.");
         if !headline_given || !body_given {
-            Set("submission_headline", headline);
-            Set("submission_body", body);
-            Reroute(story_submission_form);
+            set("submission_headline", headline);
+            set("submission_body", body);
+            reroute(story_submission_form);
         }
-        id := add_story(headline, body);
-        Redirect("/story/%", id);
+        id := Story_insert(headline, body);
+        toast("Story was submitted successfully.");
+        redirect("/story/%", id);
     });
     // user page
     route(.GET, "/user/:name", () {
-        name, _ := Get("name");
-        user, user_exists := get_user(name);
-        if !user_exists then Reroute(not_found);
-        Set("user_name", user.name);
-        Set("user_submission", "TODO");
-        Set("user_comments", "TODO");
-        Respond(Render("user"));
+        name, _ := get("name");
+        user, user_exists := User_get(name);
+        if !user_exists then reroute(not_found);
+        set("user_name", user.name);
+        set("user_id", user.id);
+        set("user_submissions", render_each(
+            Select_From(stories, where=(x)=>x.submitter_id==get_int("user_id")),
+            #code { render_it("story/header", it.id, it.headline); },
+            "<em>This user has not submitted any stories.</em>"
+        ));
+        set("user_comments", "TODO");
+        respond_index(tprint("user %", user.name), render("user"));
     });
     // user login form
     route(.GET, "/login", login_form);
-    login_form :: () {
-        Set("page_title", "Log in");
-        Set("body", Render("login"));
-        Respond(Render("index"));
-    }
+    login_form :: () { respond_index("Log in", render("login")); }
     // user login
     route(.POST, "/login", () {
-        name, name_given := Get("name");
+        name, name_given := get("name");
         if !name_given {
-            Toast("No user name provided.");
-            Reroute(login_form);
+            toast("No user name provided.");
+            reroute(login_form);
         }
-        user, user_exists := get_user(name);
+        user, user_exists := User_get(name);
         if !user_exists {
-            Toast("User does not exist.");
-            Reroute(login_form);
+            toast("User does not exist.");
+            reroute(login_form);
         }
-        password, password_given := Get("password");
+        password, password_given := get("password");
         if !password_given {
-            Toast("No password provided.");
-            Set("login_name", name);
-            Reroute(login_form);
+            toast("No password provided.");
+            set("login_name", name);
+            reroute(login_form);
         }
         if md5(password) != user.password_hash {
-            Toast("Invalid password.");
-            Set("login_name", name);
-            Reroute(login_form);
+            toast("Invalid password.");
+            set("login_name", name);
+            reroute(login_form);
         }
-        Set_Session("user_id", user.id);
-        Toast("Logged in successfully. 😀");
-        Redirect("/");
+        set_session("user_id", user.id);
+        toast("Logged in successfully. 😀"); // we can encode emoji in cookies!
+        redirect("/");
+    });
+    // user register form
+    route(.GET, "/register", register_form);
+    register_form :: () { respond_index("Register", render("register")); }
+    // user register
+    route(.POST, "/register", () {
+        name, name_given := get("name");
+        if !name_given {
+            toast("No user name provided.");
+            reroute(register_form);
+        }
+        _, user_exists := User_get(name);
+        if user_exists {
+            toast("User name is already taken.");
+            reroute(register_form);
+        }
+        password, password_given := get("password");
+        if !password_given {
+            toast("No password provided.");
+            set("register_name", name);
+            reroute(register_form);
+        }
+        password_confirm, password_confirm_given := get("password_confirm");
+        if !password_confirm_given {
+            toast("No password confirmation provided.");
+            set("register_name", name);
+            reroute(register_form);
+        }
+        if password != password_confirm {
+            toast("Password and password confirmation do not match.");
+            set("register_name", name);
+            reroute(register_form);
+        }
+        user_id := User_insert(name, md5(password));
+        set_session("user_id", user_id);
+        toast("Registered and logged in successfully. 😀");
+        redirect("/");
     });
     // user logout
     route(.GET, "/logout", () {
         end_session();
-        Toast("Logged out successfully.");
-        Toast("Please come again.");
-        Redirect("/");
+        unset_cookie("saved_name");
+        unset_cookie("saved_password");
+        toast("Logged out successfully.");
+        toast("Please come again.");
+        redirect("/");
     });
     // catch-all 404
     route(.GET, "*", "*", not_found);
-    not_found :: () {
-        Set("page_title", "page not found");
-        Set("body", Render("404"));
-        Respond(Render("index"), status=404);
-    }
+    not_found :: () { respond_index("Page not found", render("404"), status=404); }
 
 
     listen(8000);
