@@ -190,14 +190,11 @@ init_templates :: (relative_template_path: string = "/templates", extension: str
             while true {
                 start := find_index_from_left(contents, "%{");
                 if start < 0 break;
-
-                end := find_index_from_left(contents, "}");
+                
+                remaining_contents := slice(contents, start, contents.count);
+                end := find_index_from_left(remaining_contents, "}");
                 if end < 0 break;
-
-                if end < start {
-                    print("ERROR PARSING TEMPLATE!\n");
-                    break;
-                }
+                end += contents.count - remaining_contents.count;
 
                 new_param := slice(contents, start + 2, end - start - 2);
                 
@@ -275,9 +272,6 @@ end_session :: () {
     bucket_array_remove(*session_storage, context.response.session.locator);
     context.response.session = null;
     unset_cookie(SESSION_TOKEN);
-}
-in_session :: () -> bool {
-    return context.response.session != null;
 }
 //------------------------------------------------------------------------------
 // API

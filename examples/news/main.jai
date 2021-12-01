@@ -80,10 +80,6 @@ Select_From :: (items: [] $T, where: (*T) -> bool=null) -> [..] T {
 }
 
 
-// not every website makes the following equivalence, but this one does, because
-// we only use sessions for logged-in users
-logged_in :: () => in_session();
-
 // helper function, might not be needed if we change how routing works
 respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
     set("page_title", page_title);
@@ -133,7 +129,8 @@ main :: () {
     // story submission form
     route(.GET, "/submit", story_submission_form);
     story_submission_form :: () {
-        if !logged_in() {
+        _, logged_in := get_session_int("user_id");
+        if !logged_in {
             toast("You must be logged in to submit a story.");
             redirect("/login");
         }
@@ -242,7 +239,6 @@ main :: () {
         unset_cookie("saved_name");
         unset_cookie("saved_password");
         toast("Logged out successfully.");
-        toast("Please come again.");
         redirect("/");
     });
     // catch-all 404
