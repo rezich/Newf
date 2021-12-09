@@ -8,12 +8,12 @@
 
     add_build_file("main.jai", w);
 
-    //Web_Framework.prebuild_step(w);
+    Web_Framework.prebuild_step(w);
 
     while true {
         message := compiler_wait_for_message();
         if !message || message.kind == .COMPLETE break;
-        //Web_Framework.build_step(message);
+        Web_Framework.build_step(message);
     }
 
     compiler_end_intercept(w);
@@ -22,4 +22,4 @@
 
 #import "Basic";
 #import "Compiler";
-//Web_Framework :: #import "Web_Framework"(BUILDING=true);
+Web_Framework :: #import "Web_Framework"(BUILDING=true);

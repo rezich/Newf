@@ -1,5 +1,5 @@
 #module_parameters(
-    //BUILDING := false,
+    BUILDING := false,
     HOSTNAME := "localhost",
     SESSIONS_PER_BUCKET := 1000,
     SESSION_TOKEN := "_SESSION_TOKEN",
@@ -8,5 +8,5 @@
     TOAST_TEMPLATE_NAME := "toast" //TODO: remove this when Toasts become a plugin or whatever
 );
 
-/*#if BUILDING #load "src/Meta.jai";
-else */#load "src/Web_Framework.jai";
+#if BUILDING #load "src/Meta.jai";
+else #load "src/Web_Framework.jai";
