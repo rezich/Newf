@@ -1,29 +1,25 @@
 //------------------------------------------------------------------------------
 // Models
-Comment :: struct {
-    id: ID; ID :: #type int;
-    story_id: Story.ID;
-    parent_id: Comment.ID;
-    commenter_id: User.ID;
+Comment :: struct { using base: Model;
+    story: *Story;
+    parent: *Comment;
+    commenter: *User;
     body: string;
 }
-Story :: struct {
-    id: ID; ID :: #type int;
-    submitter_id: User.ID;
+Story :: struct @plural=stories { using base: Model;
+    submitter: *User;
     headline: string;
     body: string;
-    score: Score; Score :: #type int;
+    //score: Score; Score :: #type int;
 }
-User :: struct {
-    id: ID; ID :: #type int;
+User :: struct { using base: Model;
     name: string;
     password_hash: string;
 }
-Vote :: struct {
-    id: ID; ID :: #type int;
-    voter_id: User.ID;
-    story_id: Story.ID;
-    score: Story.Score;
+Vote :: struct { using base: Model;
+    voter: *User;
+    story: *Story;
+    //score: Story.Score;
 }
 
 //------------------------------------------------------------------------------
@@ -63,19 +59,18 @@ User_get :: (name: string) -> user: *User = null, exists: bool = true {
     return user;
 }
 
-votes: [..] Vote;
-Vote_insert :: (user: User, story: Story, score: Story.Score) {
-    vote: Vote;
-    vote.id = votes.count + 1;
-    vote.voter_id = user.id;
-    vote.story_id = story.id;
-    vote.score = score;
-    array_add(*votes, vote);
-}
-
 Select_From :: (items: [] $T, where: (*T) -> bool=null) -> [..] T {
     results: [..] T;
     for items if !where || where(*it) then array_add(*results, it);
+    return results;
+}
+
+Select_All_From :: ($type: Type, where_etc: string = "", args: ..Any) -> [..] type {
+    results: [..] type;
+    q := tprint("SELECT * FROM %;", type);
+    db_open(); //TODO: remove!
+    q_result := query(q);
+    db_close(); //TODO: remove!
     return results;
 }
 
@@ -89,7 +84,61 @@ respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
 
 
 main :: () {
-    User_insert("admin", "hunter2");
+    {
+        db_open();
+        query_exec(#string XX
+CREATE TABLE Comment(
+    id              INTEGER PRIMARY KEY,
+    parent_id       INTEGER,
+    commenter_id    INTEGER,
+    body            TEXT,
+    FOREIGN KEY(parent_id) REFERENCES Comment(id),
+    FOREIGN KEY(commenter_id) REFERENCES User(id)
+);
+CREATE TABLE Story(
+    id              INTEGER PRIMARY KEY,
+    submitter_id    INTEGER,
+    headline        TEXT,
+    body            TEXT,
+    FOREIGN KEY(submitter_id) REFERENCES User(id)
+);
+CREATE TABLE User(
+    id              INTEGER PRIMARY KEY,
+    name            TEXT,
+    password_hash   TEXT
+);
+CREATE TABLE Vote(
+    id              INTEGER PRIMARY KEY,
+    voter_id        INTEGER,
+    story_id        INTEGER,
+    FOREIGN KEY(voter_id) REFERENCES User(id),
+    FOREIGN KEY(story_id) REFERENCES Story(id)
+);
+XX      );
+        admin_insert_result := query_exec(tprint(#string XX
+INSERT INTO User(name, password_hash) VALUES ("admin", "%") RETURNING id;
+XX,         md5("hunter2")
+        ));
+        //admin_id := admin_insert_result.
+        query_exec(#string XX
+INSERT INTO Story(submitter_id, headline, body) VALUES
+    (1, "First Story",  "This is the first story."),
+    (1, "Second Story", "This is the second story."),
+    (1, "Third Story",  "This is the third story.");
+XX,     );
+        /*{
+            result := query("SELECT * FROM Story;");
+        }*/
+        {
+            results := Select_All_From(Story);
+            print("---\n");
+            for results print("\"%\" by %\n", it.headline, it.submitter);
+            print("---\n");
+        }
+        db_close();
+    }
+
+    //User_insert("admin", "hunter2");
 
 
     before_route(() {
@@ -109,7 +158,7 @@ main :: () {
 
     // homepage
     route(.GET, "/", () {
-        set("stories", render_each(Select_From(stories), #code
+        set("stories", render_each(Select_All_From(Story), #code
             { render_it("story/header", it.id, it.headline); }, 
             "<em>There are no stories to display at the moment.</em>"
         ));
@@ -160,12 +209,12 @@ main :: () {
         set("user_name", user.name);
         set("user_id", user.id);
         set("user_submissions", render_each(
-            Select_From(stories, where=(x)=>x.submitter_id==get_int("user_id")),
+            Select_All_From(Story, "WHERE submitter_id = %", get_int("user_id")),
             #code { render_it("story/header", it.id, it.headline); },
             "<em>This user has not submitted any stories.</em>"
         ));
         set("user_comments", render_each(
-            Select_From(comments, where=(x)=>x.commenter_id==get_int("user_id")),
+            Select_All_From(Comment, "WHERE commenter_id = %", get_int("user_id")),
             #code { /* TODO */ },
             "<em>This user has not posted any comments.</em>"
         ));

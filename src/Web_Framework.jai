@@ -30,7 +30,7 @@ Request :: struct {
     finished_routing: bool;
 }
 
-#add_context request: *Request = null;
+#add_context request: *Request;
 
 uninit :: (using req: *Request) {
     uninit(*uri.headers);
@@ -58,7 +58,7 @@ Response :: struct {
     Toast :: #type string;
 }
 
-#add_context response: *Response = null;
+#add_context response: *Response;
 
 uninit :: (using res: *Response) {
     uninit(*headers);
