@@ -103,43 +103,11 @@ ERROR_FIELD_DECLARATION :: "Model fields can only be integers, floats, bools, st
 NOTE_PLURAL ::"plural=";
 NOTE_FOREIGN_KEY :: "fk=";
 
-Model_Info :: struct {
-    name: string;
-    plural: string;
-    fields: Table(string, *Field_Info);
-}
-Field_Info :: struct {
-    tag: enum {
-        INTEGER;
-        FLOAT;
-        BOOL;
-        STRING;
-
-        FOREIGN_KEY;
-        ONE_TO_MANY;
-    }
-    name: string;
-}
-Field_Info_Integer :: struct {
-    using info: Field_Info;
-}
-Field_Info_Float :: struct {
-    using info: Field_Info;
-}
-Field_Info_Bool :: struct {
-    using info: Field_Info;
-}
-Field_Info_String :: struct {
-    using info: Field_Info;
-}
-Field_Info_Foreign_Key :: struct {
-    using info: Field_Info;
-    foreign_table: string;
-}
-Field_Info_One_To_Many :: struct {
-    using info: Field_Info;
-    foreign_key: string;
-}
+/*generate_code :: (w: Workspace) {
+    builder: String_Builder; defer free_buffers(*builder);
+    //print_to_builder(*builder, )
+    add_build_string(builder_to_string(*builder), w);
+}*/
 
 model_names: [..] string;
 models: Table(string, Model_Info);

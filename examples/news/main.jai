@@ -65,16 +65,6 @@ Select_From :: (items: [] $T, where: (*T) -> bool=null) -> [..] T {
     return results;
 }
 
-Select_All_From :: ($type: Type, where_etc: string = "", args: ..Any) -> [..] type {
-    results: [..] type;
-    q := tprint("SELECT * FROM %;", type);
-    db_open(); //TODO: remove!
-    q_result := query(q);
-    db_close(); //TODO: remove!
-    return results;
-}
-
-
 // helper function, might not be needed if we change how routing works
 respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
     set("page_title", page_title);
@@ -130,7 +120,7 @@ XX,     );
             result := query("SELECT * FROM Story;");
         }*/
         {
-            results := Select_All_From(Story);
+            results := select_from(Story);
             print("---\n");
             for results print("\"%\" by %\n", it.headline, it.submitter);
             print("---\n");
@@ -158,7 +148,7 @@ XX,     );
 
     // homepage
     route(.GET, "/", () {
-        set("stories", render_each(Select_All_From(Story), #code
+        set("stories", render_each(select_from(Story, limit=2, offset=2), #code
             { render_it("story/header", it.id, it.headline); }, 
             "<em>There are no stories to display at the moment.</em>"
         ));
@@ -168,8 +158,9 @@ XX,     );
     route(.GET, "/story/:id", () {
         id, id_valid := get_int("id");
         if !id_valid then reroute(not_found);
-        story, story_exists := Story_get(id);
-        if !story_exists then reroute(not_found);
+        results := select_from(Story, where=tprint("id = %", id));
+        if results.count == 0 then reroute(not_found);
+        story := results[0];
 
         respond_index(story.headline, render("story",
             render("story/header", story.id, story.headline),
@@ -209,12 +200,12 @@ XX,     );
         set("user_name", user.name);
         set("user_id", user.id);
         set("user_submissions", render_each(
-            Select_All_From(Story, "WHERE submitter_id = %", get_int("user_id")),
+            select_from(Story, where=tprint("submitter_id = %", get_int("user_id"))),
             #code { render_it("story/header", it.id, it.headline); },
             "<em>This user has not submitted any stories.</em>"
         ));
         set("user_comments", render_each(
-            Select_All_From(Comment, "WHERE commenter_id = %", get_int("user_id")),
+            select_from(Comment, where=tprint("commenter_id = %", get_int("user_id"))),
             #code { /* TODO */ },
             "<em>This user has not posted any comments.</em>"
         ));

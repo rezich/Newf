@@ -20,3 +20,4 @@ Database_Backend :: enum {
 #if BUILDING #load "src/Meta.jai";
 #if !BUILDING #load "src/Web_Framework.jai";
 #if !BUILDING && DATABASE_BACKEND != .NONE #load "src/ORM.jai";
+#if DATABASE_BACKEND != .NONE #load "src/Model.jai";
