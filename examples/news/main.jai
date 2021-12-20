@@ -75,7 +75,7 @@ respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
 
 main :: () {
     {
-        db_open();
+        db_open(); defer db_close();
         query_exec(#string XX
 CREATE TABLE Comment(
     id              INTEGER PRIMARY KEY,
@@ -105,31 +105,37 @@ CREATE TABLE Vote(
     FOREIGN KEY(story_id) REFERENCES Story(id)
 );
 XX      );
-        admin_insert_result := query_exec(tprint(#string XX
-INSERT INTO User(name, password_hash) VALUES ("admin", "%") RETURNING id;
-XX,         md5("hunter2")
-        ));
-        //admin_id := admin_insert_result.
-        query_exec(#string XX
-INSERT INTO Story(submitter_id, headline, body) VALUES
-    (1, "First Story",  "This is the first story."),
-    (1, "Second Story", "This is the second story."),
-    (1, "Third Story",  "This is the third story.");
-XX,     );
-        /*{
-            result := query("SELECT * FROM Story;");
-        }*/
         {
-            results := select_from(Story);
-            print("---\n");
-            for results print("\"%\" by %\n", it.headline, it.submitter);
-            print("---\n");
+            admin: User;
+            admin.name = "admin";
+            admin.password_hash = md5("hunter2");
+            insert(admin);
         }
-        db_close();
+        {
+            story: Story;
+            story.headline = "First Story?";
+            story.body = "This is the first NEW story.";
+            insert(story);
+        }
+        {
+            story: Story;
+            story.headline = "Second Story";
+            story.body = "This is the second story.";
+            insert(story);
+        }
+        {
+            story: Story;
+            story.headline = "Third Story";
+            story.body = "This is the third story.";
+            insert(story);
+        }
+        {
+            story: Story;
+            story.headline = "Fourth Story";
+            story.body = "This is the fourth story.";
+            insert(story);
+        }
     }
-
-    //User_insert("admin", "hunter2");
-
 
     before_route(() {
         year := filetime_to_localtime(get_current_file_time());
@@ -195,8 +201,9 @@ XX,     );
     // user detail
     route(.GET, "/user/:name", () {
         name, _ := get("name");
-        user, user_exists := User_get(name);
-        if !user_exists then reroute(not_found);
+        user_result := select_from(User, where=tprint("name=\"%\"", name));
+        if user_result.count == 0 then reroute(not_found);
+        user := user_result[0];
         set("user_name", user.name);
         set("user_id", user.id);
         set("user_submissions", render_each(

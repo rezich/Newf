@@ -59,7 +59,8 @@ print_result :: (result: *Query_Result) {
         return;
     }
     print("QUERY RESULT\n============\n");
-    print("QUERY: %\n", slice(result.query, 0, min(40, result.query.count)));
+    //print("QUERY: %\n", slice(result.query, 0, min(40, result.query.count)));
+    print("QUERY: %\n", result.query);
     if result.error.code != SQLITE_OK then print("Error\n-----\nCode: %\nMessage: %\n", result.error.code, result.error.message);
     for row, row_index: result.rows {
         print("  row %\n", row_index + 1);
@@ -124,6 +125,9 @@ query :: (query: string) -> Query_Result {
     //sqlite3_mutex_leave(context.db.mutex);
     if result.error.code == SQLITE_OK then result.error.code = rc;
     if result.error.code == SQLITE_DONE then result.error.code = SQLITE_OK;
+    if result.error.code != SQLITE_OK {
+        result.error.message = tprint("%", sqlite3_errmsg(context.db));
+    }
     print_result(*result);
     return result;
 }
@@ -142,21 +146,58 @@ select_from :: ($type: Type, fields: [] string = .["*"], where: string = "", lim
     q_result := query(q);
     db_close(); //TODO: remove!
     for q_result.rows array_add(*results, db_receive(type, it));
-    print("\n\n!!!!!!!!!!!!!!!!!!!!\n%\n\n", results);
+    //print("\n\n!!!!!!!!!!!!!!!!!!!!\n%\n\n", results);
     return results;
+}
+
+insert :: (obj: $T/Model) {
+    info := type_info(T);
+    names_string, values_string: string;
+    {
+        sb_names: String_Builder; defer free_buffers(*sb_names);
+        sb_values: String_Builder; defer free_buffers(*sb_values);
+        field_number := 0;
+        for member: info.members {
+            if member.flags != 0 continue;
+            comma_space := ifx field_number > 0 then ", " else "";
+            is_pointer := false;
+            if member.type.type == {
+                case .INTEGER;
+                    print_to_builder(*sb_values, "%1%2", comma_space, << cast(*int) (cast(*void) *obj + member.offset_in_bytes));
+                case .FLOAT;
+                    print_to_builder(*sb_values, "%1%2", comma_space, << cast(*float) (cast(*void) *obj + member.offset_in_bytes));
+                case .BOOL;
+                    print_to_builder(*sb_values, "%1%2", comma_space, << cast(*bool) (cast(*void) *obj + member.offset_in_bytes));
+                case .STRING;
+                    print_to_builder(*sb_values, "%1\"%2\"", comma_space, << cast(*string) (cast(*void) *obj + member.offset_in_bytes));
+                case .POINTER;
+                    other := << cast(**Model) (cast(*void) *obj + member.offset_in_bytes);
+                    id := ifx other != null then tprint("%", other.id) else "NULL";
+                    print_to_builder(*sb_values, "%1%2", comma_space, id);
+                    is_pointer = true;
+            }
+            print_to_builder(*sb_names, "%1\"%2%3\"", comma_space, member.name, ifx is_pointer then "_id" else "");
+            field_number += 1;
+        }
+        names_string = builder_to_string(*sb_names);
+        values_string = builder_to_string(*sb_values);
+    }
+    q := tprint(#string XX
+INSERT INTO %1(%2) VALUES (%3);
+XX,     T, names_string, values_string
+    );
+    print("\n\n%\n\n", q);
+    query(q);
 }
 
 db_receive :: ($type: Type, row: Query_Result.Row) -> type {
     result: type;
     info := type_info(type);
-    print("******************\n");
-    print("%\n", info.members);
-    print("\n\n");
     for member: info.members {
         if member.flags != 0 continue;
         received := table_find_pointer(row, member.name);
         if received == null continue;
-        print("RECEIVED!! % %\n", member.name, <<received);
+        //print("RECEIVED!! % %\n", member.name, <<received);
         value_location: *void = (cast(*void) *result + member.offset_in_bytes);
         if member.type.type == {
             case .INTEGER;
@@ -164,15 +205,15 @@ db_receive :: ($type: Type, row: Query_Result.Row) -> type {
             case .FLOAT;
             case .BOOL;
             case .STRING;
-                << cast(*string) value_location = copy_temporary_string(<<received);
+                << cast(*string) value_location = tprint(<<received);
             case .POINTER;
+                << cast(**Model) value_location = null; //TODO
             case .ARRAY;
         }
     }
     id, id_exists := table_find(row, "id");
     if !id_exists then print("!!!!!!!! ID NOT FOUND!!!\n");
     result.id = string_to_int(id);
-    print("????\n%\n\n", result);
     return result;
 }
 

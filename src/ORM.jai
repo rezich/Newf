@@ -1,8 +1,4 @@
 
-
-insert :: (item: $T/Model) {
-
-}
 update :: (item: $T/Model) {
 
 }
