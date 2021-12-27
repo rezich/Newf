@@ -88,10 +88,28 @@ build_step :: inline (message: *Message) {
         case .PHASE;
             phase := cast(*Message_Phase) message;
             if phase.phase == .TYPECHECKED_ALL_WE_CAN {
-                /*if !generated_code {
-                    generate_code(message.workspace);
+                if !generated_code {
+                    quick_sort(model_names, compare_strings);
+                    add_to_build(message.workspace, #string XX
+Database_Cache :: struct {
+XX, iterate(#string XX
+    _%1: Table(int, %1);
+XX), #string XX
+}
+XX                  );
                     generated_code = true;
-                }*/
+
+                    iterate :: (str: string) -> string #expand {
+                        sb: String_Builder; defer free_buffers(*sb);
+                        for `model_names print_to_builder(*sb, str, it);
+                        return builder_to_string(*sb);
+                    }
+                    add_to_build :: (w: Workspace, args: ..Any) {
+                        sb: String_Builder; defer free_buffers(*sb);
+                        for args print_to_builder(*sb, tprint("%", it));
+                        add_build_string(builder_to_string(*sb), w);
+                    }
+                }
             }
     }
 }
@@ -111,6 +129,7 @@ NOTE_FOREIGN_KEY :: "fk=";
 
 model_names: [..] string;
 models: Table(string, Model_Info);
+generated_code := false;
 
 log_verbose :: (data: string, args: ..Any) { /*#if VERBOSE print(data, ..args);*/ }
 

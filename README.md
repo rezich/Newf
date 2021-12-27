@@ -1,8 +1,6 @@
 Web_Framework
 =============
-check [the example](examples/simple) to see how it works. right now the
-metaprogram does nothing but set the executable name; this module does not
-presently require use of a metaprogram.
+check [the example](examples/news) to see how it works.
 
 **presently Windows-only.**
 
@@ -15,8 +13,13 @@ cd examples\news
 ```
 then visit [localhost:8000](localhost:8000).
 
-roadmap
--------
+short-term roadmap
+------------------
+ - add ability for select_from to fetch nested models
+ - begin work on migration system
+
+long-term roadmap
+-----------------
  - template hotloading, including graceful, helpful failure
  - static file routing
  - improve HTTP request parsing & make it completely HTTP/1.0 compliant
@@ -24,7 +27,7 @@ roadmap
  - expand template syntax
     - `%{IF cond}`, `%{ELSE}`, `%{ENDIF}` for simple control flow
     - `%{TEMPLATE template_name arg1 arg2}` to insert a template directly
- - caching?
  - HTTP 1.1
+ - linux support
  - Gemini support
  - ...

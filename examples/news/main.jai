@@ -15,6 +15,8 @@ Story :: struct @plural=stories { using base: Model;
 User :: struct { using base: Model;
     name: string;
     password_hash: string;
+    //stories: [..] *Story; @fk=submitter;
+    //comments: [..] *Comment; @fk=commenter;
 }
 Vote :: struct { using base: Model;
     voter: *User;
@@ -30,10 +32,10 @@ respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
     respond(render("index"), status=status);
 }
 
-
-main :: () {
+// code to set up the test database until we add automatic migration stuff
+setup_test_database :: () {
+    file_delete("database.db"); // obviously this won't be here later
     {
-        file_delete("database.db"); // obviously this won't be here later
         db_open(); defer db_close();
         query_exec(#string XX
 CREATE TABLE Comment(
@@ -71,30 +73,44 @@ XX      );
         admin.password_hash = md5("hunter2");
         insert(admin);
     }
+    admin: *User;
+    {
+        results := select_from(User, where="id=1");
+        admin = results[0];
+    }
     {
         story: Story;
         story.headline = "First Story?";
         story.body = "This is the first NEW story.";
+        story.submitter = admin;
         insert(story);
     }
     {
         story: Story;
         story.headline = "Second Story";
         story.body = "This is the second story.";
+        story.submitter = admin;
         insert(story);
     }
     {
         story: Story;
         story.headline = "Third Story";
         story.body = "This is the third story.";
+        story.submitter = admin;
         insert(story);
     }
     {
         story: Story;
         story.headline = "Fourth Story";
         story.body = "This is the fourth story.";
+        story.submitter = admin;
         insert(story);
     }
+}
+
+
+main :: () {
+    setup_test_database();
 
     before_route(() {
         year := filetime_to_localtime(get_current_file_time());
@@ -115,7 +131,7 @@ XX      );
     });
 
 
-    // homepage
+    // homepage ----------------------------------------------------------------
     route(.GET, "/", () {
         set("stories", render_each(select_from(Story, limit=2, offset=2),
             #code { render_it("story/header", it.id, it.headline); }, 
@@ -123,7 +139,7 @@ XX      );
         ));
         respond_index("Homepage", render("home"));
     });
-    // story detail
+    // story detail ------------------------------------------------------------
     route(.GET, "/story/:id", () {
         id, id_valid := get_int("id");
         if !id_valid then reroute(not_found);
@@ -136,7 +152,7 @@ XX      );
             render("story/body", story.body)
         ));
     });
-    // story submission form
+    // story submission form ---------------------------------------------------
     route(.GET, "/submit", story_submission_form);
     story_submission_form :: () {
         _, logged_in := get_session_int("user_id");
@@ -146,7 +162,7 @@ XX      );
         }
         respond_index("Submit story", render("submit"));
     }
-    // story submission
+    // story submission --------------------------------------------------------
     route(.POST, "/submit", () {
         story: Story;
         headline_given, body_given: bool;
@@ -163,7 +179,7 @@ XX      );
         toast("Story was submitted successfully.");
         redirect("/story/%", id);
     });
-    // user detail
+    // user detail -------------------------------------------------------------
     route(.GET, "/user/:name", () {
         name, _ := get("name");
         user_result := select_from(User, where=tprint("name=\"%\"", name));
@@ -183,10 +199,10 @@ XX      );
         ));
         respond_index(tprint("user %", user.name), render("user"));
     });
-    // user login form
+    // user login form ---------------------------------------------------------
     route(.GET, "/login", login_form);
     login_form :: () { respond_index("Log in", render("login")); }
-    // user login
+    // user login --------------------------------------------------------------
     route(.POST, "/login", () {
         name, name_given := get("name");
         if !name_given {
@@ -215,10 +231,10 @@ XX      );
         toast("Logged in successfully. 😀"); // we can encode emoji in cookies!
         redirect("/");
     });
-    // user register form
+    // user register form ------------------------------------------------------
     route(.GET, "/register", register_form);
     register_form :: () { respond_index("Register account", render("register")); }
-    // user register
+    // user register -----------------------------------------------------------
     route(.POST, "/register", () {
         name, name_given := get("name");
         if !name_given {
@@ -255,7 +271,7 @@ XX      );
         toast("Registered and logged in successfully. 😀");
         redirect("/");
     });
-    // user logout
+    // user logout -------------------------------------------------------------
     route(.GET, "/logout", () {
         end_session();
         unset_cookie("saved_name");
@@ -263,7 +279,7 @@ XX      );
         toast("Logged out successfully.");
         redirect("/");
     });
-    // catch-all 404
+    // catch-all 404 -----------------------------------------------------------
     route(.GET, "*", "*", not_found);
     not_found :: () { respond_index("Page not found", render("404"), status=404); }
 
