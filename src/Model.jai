@@ -88,7 +88,7 @@ query_exec :: (query: string) -> Query_Result {
         return 0;
     }, *result, *error_message);
     if result.error.code != SQLITE_OK {
-        result.error.message = copy_temporary_string(to_string(cast(*u8) error_message));
+        result.error.message = tprint("%", to_string(cast(*u8) sqlite3_errmsg(context.db)));
         sqlite3_free(error_message);
     }
     print_result(*result);
@@ -126,7 +126,7 @@ query :: (query: string) -> Query_Result {
     if result.error.code == SQLITE_OK then result.error.code = rc;
     if result.error.code == SQLITE_DONE then result.error.code = SQLITE_OK;
     if result.error.code != SQLITE_OK {
-        result.error.message = tprint("%", sqlite3_errmsg(context.db));
+        result.error.message = tprint("%", to_string(cast(*u8) sqlite3_errmsg(context.db)));
     }
     print_result(*result);
     return result;
@@ -150,7 +150,7 @@ select_from :: ($type: Type, fields: [] string = .["*"], where: string = "", lim
     return results;
 }
 
-insert :: (obj: $T/Model) {
+insert :: (obj: $T/Model) -> int {
     info := type_info(T);
     names_string, values_string: string;
     {
@@ -188,6 +188,7 @@ XX,     T, names_string, values_string
     );
     print("\n\n%\n\n", q);
     query(q);
+    return sqlite3_last_insert_rowid(context.db);
 }
 
 db_receive :: ($type: Type, row: Query_Result.Row) -> type {
@@ -220,7 +221,6 @@ db_receive :: ($type: Type, row: Query_Result.Row) -> type {
 db_open :: () {
     #if DATABASE_BACKEND == .SQLITE {
         error_message: *s8;
-        file_delete("database.db"); // obviously this won't be here later
         rc := sqlite3_open(cast(*s8) to_c_string("database.db"), *context.db);
         if rc then print("!!! Can't open database.\n");
     }

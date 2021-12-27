@@ -157,7 +157,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         // parse request
         req.raw = to_string(request_buffer.data);
         req_string := req.raw;
-        log("---\n%\n---", req_string);
+        //log("---\n%\n---", req_string);
         method_end := find_index_from_left(req_string, " ");
         if method_end < 0 return .CONTINUE;
         if slice(req_string, 0, method_end) == {
