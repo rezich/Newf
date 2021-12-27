@@ -66,6 +66,7 @@ print_result :: (result: *Query_Result) {
         print("  row %\n", row_index + 1);
         for row print("    %: %\n", it_index, it);
     }
+    print("\n");
 }
 
 query_exec :: (query: string) -> Query_Result {
@@ -169,26 +170,34 @@ insert :: (obj: $T/Model) -> int {
                 case .BOOL;
                     print_to_builder(*sb_values, "%1%2", comma_space, << cast(*bool) (cast(*void) *obj + member.offset_in_bytes));
                 case .STRING;
-                    print_to_builder(*sb_values, "%1\"%2\"", comma_space, << cast(*string) (cast(*void) *obj + member.offset_in_bytes));
+                    print_to_builder(*sb_values, "%1'%2'", comma_space, << cast(*string) (cast(*void) *obj + member.offset_in_bytes));
                 case .POINTER;
                     other := << cast(**Model) (cast(*void) *obj + member.offset_in_bytes);
                     id := ifx other != null then tprint("%", other.id) else "NULL";
                     print_to_builder(*sb_values, "%1%2", comma_space, id);
                     is_pointer = true;
             }
-            print_to_builder(*sb_names, "%1\"%2%3\"", comma_space, member.name, ifx is_pointer then "_id" else "");
+            print_to_builder(*sb_names, "%1%2%3", comma_space, member.name, ifx is_pointer then "_id" else "");
             field_number += 1;
         }
         names_string = builder_to_string(*sb_names);
         values_string = builder_to_string(*sb_values);
     }
     q := tprint(#string XX
-INSERT INTO %1(%2) VALUES (%3);
+INSERT INTO %1(%2) VALUES (%3) RETURNING id;
 XX,     T, names_string, values_string
     );
-    print("\n\n%\n\n", q);
-    query(q);
-    return sqlite3_last_insert_rowid(context.db);
+    db_open(); //TODO: remove!
+    result := query(q);
+    db_close(); //TODO: remove!
+    id := -1;
+    if result.rows.count > 0 {
+        row := result.rows[0];
+        row_id, success := table_find(row, "id");
+        if success then id = parse_int(*row_id);
+    }
+    //return sqlite3_last_insert_rowid(context.db); // TODO: don't use this?
+    return id;
 }
 
 db_receive :: ($type: Type, row: Query_Result.Row) -> type {

@@ -22,18 +22,6 @@ Vote :: struct { using base: Model;
     //score: Story.Score;
 }
 
-//------------------------------------------------------------------------------
-// Database (non-persistent)
-comments: [..] Comment;
-stories: [..] Story;
-Story_insert :: (headline: string, body: string) -> Story.ID {
-    story: Story;
-    story.id = stories.count + 1;
-    story.headline = headline;
-    story.body = body;
-    array_add(*stories, story);
-    return story.id;
-}
 
 // helper function, might not be needed if we change how routing works
 respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
@@ -76,36 +64,36 @@ CREATE TABLE Vote(
     FOREIGN KEY(story_id) REFERENCES Story(id)
 );
 XX      );
-        {
-            admin: User;
-            admin.name = "admin";
-            admin.password_hash = md5("hunter2");
-            insert(admin);
-        }
-        {
-            story: Story;
-            story.headline = "First Story?";
-            story.body = "This is the first NEW story.";
-            insert(story);
-        }
-        {
-            story: Story;
-            story.headline = "Second Story";
-            story.body = "This is the second story.";
-            insert(story);
-        }
-        {
-            story: Story;
-            story.headline = "Third Story";
-            story.body = "This is the third story.";
-            insert(story);
-        }
-        {
-            story: Story;
-            story.headline = "Fourth Story";
-            story.body = "This is the fourth story.";
-            insert(story);
-        }
+    }
+    {
+        admin: User;
+        admin.name = "admin";
+        admin.password_hash = md5("hunter2");
+        insert(admin);
+    }
+    {
+        story: Story;
+        story.headline = "First Story?";
+        story.body = "This is the first NEW story.";
+        insert(story);
+    }
+    {
+        story: Story;
+        story.headline = "Second Story";
+        story.body = "This is the second story.";
+        insert(story);
+    }
+    {
+        story: Story;
+        story.headline = "Third Story";
+        story.body = "This is the third story.";
+        insert(story);
+    }
+    {
+        story: Story;
+        story.headline = "Fourth Story";
+        story.body = "This is the fourth story.";
+        insert(story);
     }
 
     before_route(() {
@@ -114,7 +102,6 @@ XX      );
         set("site_title", "Something News");
         current_user_id, logged_in := get_session_int("user_id");
         if logged_in {
-            print("$$$$$$$$$$$$$ current_user_id=%\n", current_user_id);
             user_result := select_from(User, where=tprint("id=%", current_user_id));
             if user_result.count != 0 {
                 current_user := user_result[0];

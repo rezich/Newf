@@ -341,7 +341,7 @@ set_header :: (key: string, value: Any) { set_header(tprint("%", value)); }
 set_header :: (key: string, value: string) {
     table_set(*context.response.headers, key, value);
 }
-set_session :: (key: string, value: Any) { set_session(key, tprint("%", value)); }
+set_session :: (key: string, value: Any) { set_session(key, sprint("%", value)); }
 set_session :: (key: string, value: string) {
     begin_session();
     table_set(*context.response.session.params, key, value);

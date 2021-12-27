@@ -19,7 +19,7 @@ h1, h2 {
     justify-content: space-between;
     align-items: baseline;
 }
-.header a:visited {
+.header a, .header a:visited {
     color: inherit;
 }
 .header ul {
