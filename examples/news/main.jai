@@ -15,7 +15,7 @@ Story :: struct @plural=stories { using base: Model;
 User :: struct { using base: Model;
     name: string;
     password_hash: string;
-    //stories: [..] *Story; @fk=submitter;
+    stories: [..] *Story; @fk=submitter;
     //comments: [..] *Comment; @fk=commenter;
 }
 Vote :: struct { using base: Model;
@@ -80,6 +80,7 @@ setup_test_database :: () {
 
 
 main :: () {
+    set_model_infos();
     setup_test_database();
 
     before_route(() {
@@ -156,13 +157,14 @@ main :: () {
     // user detail -------------------------------------------------------------
     route(.GET, "/user/:name", () {
         name, _ := get("name");
-        user_result := select_from(User, where=tprint("name=\"%\"", name));
+        user_result := select_from(User, where=tprint("name=\"%\"", name), fetch=.["stories"/*, "comments"*/]); // fetch doesn't work yet
         if user_result.count == 0 then reroute(not_found);
         user := user_result[0];
         set("user_name", user.name);
         set("user_id", user.id);
         set("user_submissions", render_each(
-            select_from(Story, where=tprint("submitter_id = %", get_int("user_id"))),
+            user.stories,
+            //select_from(Story, where=tprint("submitter_id = %", get_int("user_id"))),
             #code { render_it("story/header", it.id, it.headline); },
             "<em>This user has not submitted any stories.</em>"
         ));

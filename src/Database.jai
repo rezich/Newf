@@ -109,6 +109,29 @@ select_from :: ($type: Type, fields: [] string = .["*"], where: string = "", lim
         inserted: *type;
         #insert #run sprint("inserted = table_set(*context.db_cache._%1, received.id, received);", type);
         array_add(*results, inserted);
+
+        /*for fetch_name: fetch {
+            model_info := table_find_pointer(model_infos, type_info(type).name);
+            //generic_field_info, success := table_find(model_info.fields, fetch_name);
+            field_info := cast(*Field_Info_One_To_Many) *generic_field_info;
+            log("%", (<<field_info).tag);
+            if !field_info {
+                print("!! ERROR: cannot fetch %!\n", fetch_name); //TODO: improve
+                break;
+            }
+            info := type_info(type);
+            for member: info.members {
+                if member.name == fetch_name {
+                    //TODO: ensure that it's an array, probably
+                    array_element_type_name := (cast(*Type_Info_Struct) (cast(*Type_Info_Pointer) (cast(*Type_Info_Array) member.type).element_type).pointer_to).name;
+                    print("!!!!!!!!!!!!! % % % !!!!!!!!!!!!!\n", member.name, array_element_type_name, field_info.foreign_key);
+                    q := xprint("SELECT * FROM ", array_element_type_name, " WHERE ", field_info.foreign_key, "_id=", inserted.id);
+                    log(q);
+                    //#insert_internal #run sprint("select_from(%);", array_element_type_name);
+                }
+            }
+            //#insert #run sprint("array_add(inserted.%, )
+        }*/
     }
     return results;
 }
@@ -122,6 +145,7 @@ insert :: (obj: $T/Model) -> int {
         field_number := 0;
         for member: info.members {
             if member.flags != 0 continue;
+            if member.type.type == .ARRAY continue;
             comma_space := ifx field_number > 0 then ", " else "";
             is_pointer := false;
             if member.type.type == {

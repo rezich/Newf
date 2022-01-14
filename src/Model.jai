@@ -39,3 +39,6 @@ Field_Info_One_To_Many :: struct {
     using info: Field_Info;
     foreign_key: string;
 }
+
+#placeholder set_model_infos;
+model_infos: Table(string, Model_Info);

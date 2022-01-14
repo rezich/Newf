@@ -30,7 +30,7 @@ build_step :: inline (message: *Message) {
                     _model_info: Model_Info;
                     _model_info.name = name;
                     _model_info.plural = plural;
-                    model_info = table_set(*models, name, _model_info);
+                    model_info = table_set(*model_infos, name, _model_info);
                     if array_add_if_unique(*model_names, name) {
                         log_verbose("Model: % | plural: %\n", name, plural);
                         code_struct_type_info := code_struct.defined_type;
@@ -100,7 +100,7 @@ XX                  );
                     database_schema_builder: String_Builder; defer free_buffers(*database_schema_builder);
                     for name: model_names {
                         foreign_key_builder: String_Builder; defer free_buffers(*foreign_key_builder);
-                        model := table_find_pointer(models, name);
+                        model := table_find_pointer(model_infos, name);
                         print_to_builder(*database_schema_builder, "CREATE TABLE %(\n    id  INTEGER PRIMARY KEY,", name);
                         append(*database_schema_builder, "\n    created   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,");
                         append(*database_schema_builder, "\n    modified  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
@@ -124,6 +124,78 @@ XX                  );
                     database_schema := builder_to_string(*database_schema_builder);
                     log_verbose(database_schema);
                     add_to_build(message.workspace, "database_schema :: #string XX\n", database_schema, "\nXX;");
+
+                    model_infos_builder: String_Builder; defer free_buffers(*model_infos_builder);
+                    append(*model_infos_builder, "set_model_infos :: () {\n");
+                    for name: model_names {
+                        model := table_find_pointer(model_infos, name);
+                        append(*model_infos_builder, "    {\n");
+                        print_to_builder(*model_infos_builder, #string XX
+        model_info: *Model_Info;
+        _model_info: Model_Info;
+        _model_info.name = "%1";
+        _model_info.plural = "%2";
+        model_info = table_set(*model_infos, "%1", _model_info);
+XX,                     name, model.plural);
+                        for field: model.fields {
+                            append(*model_infos_builder, "        {\n");
+                            if field.tag == {
+                                case .INTEGER;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_Integer);
+                field_info.tag = .INTEGER;
+                field_info.name = "%1";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name);
+                                case .FLOAT;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_Float);
+                field_info.tag = .FLOAT;
+                field_info.name = "%1";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name);
+                                case .BOOL;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_Bool);
+                field_info.tag = .BOOL;
+                field_info.name = "%1";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name);
+                                case .STRING;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_String);
+                field_info.tag = .STRING;
+                field_info.name = "%1";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name);
+                                case .FOREIGN_KEY;
+                                    fk_field := cast(*Field_Info_Foreign_Key) field;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_Foreign_Key);
+                field_info.tag = .FOREIGN_KEY;
+                field_info.name = "%1";
+                field_info.foreign_table = "%2";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name, fk_field.foreign_table);
+                                case .ONE_TO_MANY;
+                                    otm_field := cast(*Field_Info_One_To_Many) field;
+                                    print_to_builder(*model_infos_builder, #string XX
+                field_info := New(Field_Info_One_To_Many);
+                field_info.tag = .ONE_TO_MANY;
+                field_info.name = "%1";
+                field_info.foreign_key = "%2";
+                table_set(*model_info.fields, "%1", field_info);
+XX,                                 field.name, otm_field.foreign_key);
+                            }
+                            append(*model_infos_builder, "        }\n");
+                        }
+                        //append(*model_infos_builder, "        field_info := New(Field_Info);\n");
+                        append(*model_infos_builder, "    }\n");
+                    }
+                    append(*model_infos_builder, "}");
+                    model_infos_string := builder_to_string(*model_infos_builder);
+                    log_verbose(model_infos_string);
+                    add_to_build(message.workspace, model_infos_string);
                     generated_code = true;
 
                     iterate :: (str: string) -> string #expand {
@@ -155,7 +227,7 @@ NOTE_FOREIGN_KEY :: "fk=";
 }*/
 
 model_names: [..] string;
-models: Table(string, Model_Info);
+//models: Table(string, Model_Info);
 generated_code := false;
 
 log_verbose :: (data: string, args: ..Any) { #if VERBOSE log(data, ..args); }
