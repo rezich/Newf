@@ -1,5 +1,6 @@
 #module_parameters(
     BUILDING := false,
+    VERBOSE := true,
     HOSTNAME := "localhost",
     SESSIONS_PER_BUCKET := 1000,
     SESSION_TOKEN := "_SESSION_TOKEN",

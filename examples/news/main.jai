@@ -31,41 +31,11 @@ respond_index :: (page_title: string, body: string, status: HTTP_Status=200) {
     set("body", body);
     respond(render("index"), status=status);
 }
-
-// code to set up the test database until we add automatic migration stuff
 setup_test_database :: () {
     file_delete("database.db"); // obviously this won't be here later
     {
         db_open(); defer db_close();
-        query_exec(#string XX
-CREATE TABLE Comment(
-    id              INTEGER PRIMARY KEY,
-    parent_id       INTEGER,
-    commenter_id    INTEGER,
-    body            TEXT,
-    FOREIGN KEY(parent_id) REFERENCES Comment(id),
-    FOREIGN KEY(commenter_id) REFERENCES User(id)
-);
-CREATE TABLE Story(
-    id              INTEGER PRIMARY KEY,
-    submitter_id    INTEGER,
-    headline        TEXT,
-    body            TEXT,
-    FOREIGN KEY(submitter_id) REFERENCES User(id)
-);
-CREATE TABLE User(
-    id              INTEGER PRIMARY KEY,
-    name            TEXT,
-    password_hash   TEXT
-);
-CREATE TABLE Vote(
-    id              INTEGER PRIMARY KEY,
-    voter_id        INTEGER,
-    story_id        INTEGER,
-    FOREIGN KEY(voter_id) REFERENCES User(id),
-    FOREIGN KEY(story_id) REFERENCES Story(id)
-);
-XX      );
+        query_exec(database_schema);
     }
     {
         admin: User;
@@ -139,6 +109,7 @@ main :: () {
         ));
         respond_index("Homepage", render("home"));
     });
+
     // story detail ------------------------------------------------------------
     route(.GET, "/story/:id", () {
         id, id_valid := get_int("id");
@@ -152,6 +123,7 @@ main :: () {
             render("story/body", story.body)
         ));
     });
+
     // story submission form ---------------------------------------------------
     route(.GET, "/submit", story_submission_form);
     story_submission_form :: () {
@@ -162,6 +134,7 @@ main :: () {
         }
         respond_index("Submit story", render("submit"));
     }
+
     // story submission --------------------------------------------------------
     route(.POST, "/submit", () {
         story: Story;
@@ -179,6 +152,7 @@ main :: () {
         toast("Story was submitted successfully.");
         redirect("/story/%", id);
     });
+
     // user detail -------------------------------------------------------------
     route(.GET, "/user/:name", () {
         name, _ := get("name");
@@ -199,9 +173,11 @@ main :: () {
         ));
         respond_index(tprint("user %", user.name), render("user"));
     });
+
     // user login form ---------------------------------------------------------
     route(.GET, "/login", login_form);
     login_form :: () { respond_index("Log in", render("login")); }
+
     // user login --------------------------------------------------------------
     route(.POST, "/login", () {
         name, name_given := get("name");
@@ -231,9 +207,11 @@ main :: () {
         toast("Logged in successfully. 😀"); // we can encode emoji in cookies!
         redirect("/");
     });
+
     // user register form ------------------------------------------------------
     route(.GET, "/register", register_form);
     register_form :: () { respond_index("Register account", render("register")); }
+
     // user register -----------------------------------------------------------
     route(.POST, "/register", () {
         name, name_given := get("name");
@@ -271,6 +249,7 @@ main :: () {
         toast("Registered and logged in successfully. 😀");
         redirect("/");
     });
+
     // user logout -------------------------------------------------------------
     route(.GET, "/logout", () {
         end_session();
@@ -279,6 +258,7 @@ main :: () {
         toast("Logged out successfully.");
         redirect("/");
     });
+
     // catch-all 404 -----------------------------------------------------------
     route(.GET, "*", "*", not_found);
     not_found :: () { respond_index("Page not found", render("404"), status=404); }

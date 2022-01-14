@@ -97,6 +97,33 @@ XX, iterate(#string XX
 XX), #string XX
 }
 XX                  );
+                    database_schema_builder: String_Builder; defer free_buffers(*database_schema_builder);
+                    for name: model_names {
+                        foreign_key_builder: String_Builder; defer free_buffers(*foreign_key_builder);
+                        model := table_find_pointer(models, name);
+                        print_to_builder(*database_schema_builder, "CREATE TABLE %(\n    id  INTEGER PRIMARY KEY,", name);
+                        append(*database_schema_builder, "\n    created   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,");
+                        append(*database_schema_builder, "\n    modified  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+                        for field: model.fields {
+                            if field.tag == .ONE_TO_MANY then continue;
+                            append(*database_schema_builder, ",\n");
+                            if field.tag == {
+                                case .INTEGER; print_to_builder(*database_schema_builder, "    %  INTEGER", field.name);
+                                case .FLOAT; print_to_builder(*database_schema_builder, "    % REAL", field.name);
+                                case .BOOL; print_to_builder(*database_schema_builder, "    %  INTEGER", field.name);
+                                case .STRING; print_to_builder(*database_schema_builder, "    %  TEXT", field.name);
+                                case .FOREIGN_KEY;
+                                    fk_field := cast(*Field_Info_Foreign_Key) field;
+                                    print_to_builder(*database_schema_builder, "    %_id  INTEGER", field.name);
+                                    print_to_builder(*foreign_key_builder, ",\n    FOREIGN KEY(%_id) REFERENCES %(id)", field.name, fk_field.foreign_table);
+                            }
+                        }
+                        append(*database_schema_builder, builder_to_string(*foreign_key_builder));
+                        print_to_builder(*database_schema_builder, "\n) STRICT;\n");
+                    }
+                    database_schema := builder_to_string(*database_schema_builder);
+                    log_verbose(database_schema);
+                    add_to_build(message.workspace, "database_schema :: #string XX\n", database_schema, "\nXX;");
                     generated_code = true;
 
                     iterate :: (str: string) -> string #expand {
@@ -131,7 +158,7 @@ model_names: [..] string;
 models: Table(string, Model_Info);
 generated_code := false;
 
-log_verbose :: (data: string, args: ..Any) { /*#if VERBOSE print(data, ..args);*/ }
+log_verbose :: (data: string, args: ..Any) { #if VERBOSE log(data, ..args); }
 
 #import "Web_Framework"(BUILDING=true);
 

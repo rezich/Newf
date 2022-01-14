@@ -10,6 +10,7 @@ Query_Result :: struct {
 }
 
 #placeholder Database_Cache;
+#placeholder database_schema;
 #add_context db_cache: Database_Cache;
 
 print_result :: (result: *Query_Result) {
