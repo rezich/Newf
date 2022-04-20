@@ -6,3 +6,4 @@
 *.db
 *.dll
 !lib/**/*.dll
+.vs

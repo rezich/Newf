@@ -1,15 +1,16 @@
-Web_Framework
-=============
-check [the example](examples/news) to see how it works.
+Newf
+====
+check [the example](examples/Dorknews) to see how it works.
 
 **presently Windows-only.**
 
 check it out
 ------------
 ```
-cd examples\news
-.\build
-.\www
+cd examples\Dorknews
+cp ..\..\lib\sqlite\sqlite3.dll .
+jai Dorknews.jai
+.\Dorknews
 ```
 then visit [localhost:8000](localhost:8000).
 

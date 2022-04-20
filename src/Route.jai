@@ -1,9 +1,8 @@
 ROUTE_PATH_SEPARATORS :: "/";
-//#scope_file
 Route :: struct {
     method: Request_Method;
     subdomain: string;
-    response: ();
+    proc: Proc;
     stretches: [..] Stretch;
     params: [..] string;
 
@@ -17,18 +16,23 @@ Route :: struct {
             PARAM;
         }
     }
+    Proc :: #type (Payload);
+    Payload :: struct {
+        req: *Request;
+        res: *Response;
+    }
 }
-//#scope_export
+
 routes: [..] Route;
 routes_match_subdomains := false;
 
-route :: (method: Request_Method, path: string, response: ()) { route(method, "", path, response); }
-route :: (method: Request_Method, subdomain: string, path: string, response: ()) {
+route :: (method: Request_Method, path: string, proc: Route.Proc) { route(method, "", path, proc); }
+route :: (method: Request_Method, subdomain: string, path: string, proc: Route.Proc) {
     if subdomain != "" then routes_match_subdomains = true;
     r: Route;
     r.method = method;
     r.subdomain = subdomain;
-    r.response = response;
+    r.proc = proc;
     parse_route_path(*r, path);
 
     array_add(*routes, r);
@@ -80,3 +84,9 @@ route :: (method: Request_Method, subdomain: string, path: string, response: ())
         }
     }
 }
+
+before_routes: [..] Route.Proc;
+after_routes: [..] Route.Proc;
+
+before_route :: inline (proc: Route.Proc) { array_add(*before_routes, proc); }
+after_route :: inline (proc: Route.Proc) { array_add(*after_routes, proc); }

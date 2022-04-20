@@ -1,3 +1,8 @@
+Template :: struct {
+    body: string;
+    params: [..] string;
+    pieces: [..] Template_Piece;
+}
 Template_Piece :: struct {
     type: enum {
         TEXT;
@@ -5,11 +10,6 @@ Template_Piece :: struct {
     }
     text: string;
     param_id: int;
-}
-Template :: struct {
-    body: string;
-    params: [..] string;
-    pieces: [..] Template_Piece;
 }
 
 templates: Table(string, Template);

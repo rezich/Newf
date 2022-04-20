@@ -1,16 +1,5 @@
 prebuild_step :: (w: Workspace) {
     array_reset(*model_names);
-    /*generated_code = false;
-    array_reset(*entity_type_names);
-    table_reset(*entity_items_per_bucket);
-    _entity_type_name = entity_type_name;
-    if autoload {
-        assert(file_exists(autoload_directory), sprint("Entity autoload directory % not found.", autoload_directory));
-        entity_files := file_list(autoload_directory);
-        for entity_files add_build_string(tprint("#load \"%\";", it), w);
-    }
-
-    init(*entity_items_per_bucket);*/
 }
 
 build_step :: inline (message: *Message) {
@@ -23,7 +12,7 @@ build_step :: inline (message: *Message) {
                 // get all Model
                 if is_subclass_of(code_struct.defined_type, "Model") {
                     name_lower := copy_string(name);
-                    to_lower(name_lower);
+                    to_lower_in_place(name_lower);
                     plural := tprint("%1%2", name_lower, "s");
                     for note: code_struct.notes if begins_with(note.text, NOTE_PLURAL) then plural = slice(note.text, NOTE_PLURAL.count, note.text.count);
                     model_info: *Model_Info;
@@ -220,19 +209,12 @@ ERROR_FIELD_DECLARATION :: "Model fields can only be integers, floats, bools, st
 NOTE_PLURAL ::"plural=";
 NOTE_FOREIGN_KEY :: "fk=";
 
-/*generate_code :: (w: Workspace) {
-    builder: String_Builder; defer free_buffers(*builder);
-    //print_to_builder(*builder, )
-    add_build_string(builder_to_string(*builder), w);
-}*/
-
 model_names: [..] string;
-//models: Table(string, Model_Info);
 generated_code := false;
 
 log_verbose :: (data: string, args: ..Any) { #if VERBOSE log(data, ..args); }
 
-#import "Web_Framework"(BUILDING=true);
+#import "Newf"(BUILDING=true);
 
 #import "Basic";
 #import "Compiler";

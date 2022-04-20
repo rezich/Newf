@@ -110,11 +110,9 @@ select_from :: ($type: Type, fields: [] string = .["*"], where: string = "", lim
         #insert #run sprint("inserted = table_set(*context.db_cache._%1, received.id, received);", type);
         array_add(*results, inserted);
 
-        /*for fetch_name: fetch {
+        for fetch_name: fetch {
             model_info := table_find_pointer(model_infos, type_info(type).name);
-            //generic_field_info, success := table_find(model_info.fields, fetch_name);
-            field_info := cast(*Field_Info_One_To_Many) *generic_field_info;
-            log("%", (<<field_info).tag);
+            field_info := <<cast(**Field_Info_One_To_Many) table_find_pointer(model_info.fields, fetch_name);
             if !field_info {
                 print("!! ERROR: cannot fetch %!\n", fetch_name); //TODO: improve
                 break;
@@ -126,12 +124,18 @@ select_from :: ($type: Type, fields: [] string = .["*"], where: string = "", lim
                     array_element_type_name := (cast(*Type_Info_Struct) (cast(*Type_Info_Pointer) (cast(*Type_Info_Array) member.type).element_type).pointer_to).name;
                     print("!!!!!!!!!!!!! % % % !!!!!!!!!!!!!\n", member.name, array_element_type_name, field_info.foreign_key);
                     q := xprint("SELECT * FROM ", array_element_type_name, " WHERE ", field_info.foreign_key, "_id=", inserted.id);
-                    log(q);
+                    db_open(); //TODO: remove!
+                    q_result := query(q);
+                    db_close(); //TODO: remove!
+                    for q_result.rows {
+                        //#insert #run sprint("received := db_receive(type, it);", array_element_type_name);
+                        //#insert_internal #run sprint("fetched_and_inserted := table_set(*context.db_cache._%1, received.id, received);", array_element_type_name);
+                    }
                     //#insert_internal #run sprint("select_from(%);", array_element_type_name);
                 }
             }
             //#insert #run sprint("array_add(inserted.%, )
-        }*/
+        }
     }
     return results;
 }
