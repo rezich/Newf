@@ -1,4 +1,4 @@
-EXECUTABLE_NAME :: "Dorknews";
+EXECUTABLE_NAME :: "www";
 USER_MODULES_PATH :: "../../../";
 ENTRY_POINT :: "Main.jai";
 

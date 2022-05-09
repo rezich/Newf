@@ -6,6 +6,7 @@ MAX_THREADS :: 8;
 TIMEOUT_SECONDS :: 10;
 
 Buffer :: #type [BUFFER_SIZE+1] u8;
+Request_Buffer :: #type [REQUEST_BUFFER_SIZE+1] u8;
 
 Server :: struct {
     port: u16;
@@ -19,6 +20,7 @@ Request_Resolution :: struct {
     res: Response;
     buffer: Buffer;
 }
+#add_context reqres: *Request_Resolution;
 Client :: struct {
     socket: Socket;
 }
@@ -116,7 +118,7 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
     defer reset_temporary_storage();
     defer shutdown(client.socket, SD_BOTH);
 
-    request_buffer: [REQUEST_BUFFER_SIZE+1] u8;
+    request_buffer: Request_Buffer;
     waiting := true;
     start_time := get_time();
     while waiting {
@@ -134,158 +136,158 @@ resolve :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Contin
         else request_buffer[REQUEST_BUFFER_SIZE] = 0;
         waiting = false;
     }
-    // parse request
-    req.raw = to_string(request_buffer.data);
-    req_string := req.raw;
-    log("---------- ---------- ---------- ----------");
-    method_end := find_index_from_left(req_string, " ");
-    if method_end < 0 return .CONTINUE;
-    if slice(req_string, 0, method_end) == {
-        case "GET"; req.uri.method = .GET;
-        case "POST"; req.uri.method = .POST;
-        case; req.uri.method = .PATCH; // ???
-    }
-    req_string = slice(req_string, method_end + 1, req_string.count);
-    path_end := find_index_from_left(req_string, " ");
-    if path_end < 0 return .CONTINUE;
-    req.uri.path = slice(req_string, 0, path_end);
-    req_string = slice(req_string, path_end + 1, req_string.count);
-    http_end := find_index_from_left(req_string, "\r\n");
-    if http_end < 0 return .CONTINUE;
-    req_string = slice(req_string, http_end, req_string.count);
 
-    section: enum {
-        HEADERS;
-        BODY;
-    } = .HEADERS; //TODO
-    parse_body := false;
-
-    for split(req_string, "\r\n") {
-        kv := split(it, ": ");
-        if kv.count == 2 {
-            table_add(*req.uri.headers, kv[0], kv[1]);
-            // parse subdomain
-            if kv[0] == {
-                case "Host";
-                    found, left := split_from_left(kv[1], HOSTNAME);
-                    if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
-                case "Content-Type";
-                    if kv[1] == "application/x-www-form-urlencoded" then parse_body = true;
-                case "Cookie";
-                    for split(kv[1], "; ") {
-                        kv := split(it, "=");
-                        if kv.count == 2 {
-                            if kv[0] == {
-                                case SESSION_TOKEN; load_or_begin_session(*res, kv[1]);
-                                case UNSEEN_TOASTS_TOKEN; for split(decode_uri_component(kv[1]), UNSEEN_TOASTS_SEPARATOR) array_add(*res.toasts, it);
-                            }
-                            table_add(*req.cookies, kv[0], kv[1]);
-                        }
-                    }
-            }
+    new_context := context;
+    new_context.reqres = request_resolution;
+    push_context new_context {
+        // parse request
+        req.raw = to_string(request_buffer.data);
+        req_string := req.raw;
+        log("---------- ---------- ---------- ----------");
+        method_end := find_index_from_left(req_string, " ");
+        if method_end < 0 return .CONTINUE;
+        if slice(req_string, 0, method_end) == {
+            case "GET"; req.uri.method = .GET;
+            case "POST"; req.uri.method = .POST;
+            case; req.uri.method = .PATCH; // ???
         }
-        else if parse_body {
-            for split(it, "&") {
-                kv = split(it, "=");
-                if kv.count == 2 {
-                    key := decode_form(kv[0]);
-                    value := decode_form(kv[1]);
-                    table_set(*req.form_data, key, value);
-                    set(*req, key, value);
+        req_string = slice(req_string, method_end + 1, req_string.count);
+        path_end := find_index_from_left(req_string, " ");
+        if path_end < 0 return .CONTINUE;
+        req.uri.path = slice(req_string, 0, path_end);
+        req_string = slice(req_string, path_end + 1, req_string.count);
+        http_end := find_index_from_left(req_string, "\r\n");
+        if http_end < 0 return .CONTINUE;
+        req_string = slice(req_string, http_end, req_string.count);
+
+        section: enum {
+            HEADERS;
+            BODY;
+        } = .HEADERS; //TODO
+        parse_body := false;
+
+        for split(req_string, "\r\n") {
+            kv := split(it, ": ");
+            if kv.count == 2 {
+                table_add(*req.uri.headers, kv[0], kv[1]);
+                // parse subdomain
+                if kv[0] == {
+                    case "Host";
+                        found, left := split_from_left(kv[1], HOSTNAME);
+                        if found && left.count > 0 then req.uri.subdomain = slice(left, 0, left.count-1);
+                    case "Content-Type";
+                        if kv[1] == "application/x-www-form-urlencoded" then parse_body = true;
+                    case "Cookie";
+                        for split(kv[1], "; ") {
+                            kv := split(it, "=");
+                            if kv.count == 2 {
+                                if kv[0] == {
+                                    case SESSION_TOKEN; load_or_begin_session(kv[1]);
+                                    case UNSEEN_TOASTS_TOKEN; for split(decode_uri_component(kv[1]), UNSEEN_TOASTS_SEPARATOR) array_add(*res.toasts, it);
+                                }
+                                table_add(*req.cookies, kv[0], kv[1]);
+                            }
+                        }
+                }
+            }
+            else if parse_body {
+                for split(it, "&") {
+                    kv = split(it, "=");
+                    if kv.count == 2 {
+                        key := decode_form(kv[0]);
+                        value := decode_form(kv[1]);
+                        table_set(*req.form_data, key, value);
+                        param_set(key, value);
+                    }
                 }
             }
         }
-    }
 
-    proc: Route.Proc;
-    params: Table(string, string);
-    defer uninit(*params);
+        proc: Route.Proc;
+        params: Table(string, string);
+        defer uninit(*params);
 
-    // parse query string & ignore it for routing
-    path_without_query_string: string;
-    query_string_begin := find_index_from_left(req.uri.path, #char "?");
-    if query_string_begin >= 0 {
-        path_without_query_string = slice(req.uri.path, 0, query_string_begin);
-        query_string := decode_uri_component(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
-        req.uri.query = query_string;
-        for split(query_string, "&") {
-            second: *string;
-            kv := split(it, "=");
-            if kv.count == {
-                case 1; second = *kv[0];
-                case 2; second = *kv[1];
-            }
-            table_set(*req.uri.query_params, kv[0], <<second);
-            set(*req, kv[0], <<second);
-        }
-    }
-    else path_without_query_string = req.uri.path;
-
-    // routing
-    for route: routes {
-        if req.uri.method != route.method continue;
-        if routes_match_subdomains && req.uri.subdomain != route.subdomain && route.subdomain != "*" continue;
-        table_reset(*params);
-        str := path_without_query_string;
-        n := 0;
-        current_param := 0;
-        end_of_param: int;
-        while str != "" && n < route.stretches.count {
-            stretch := *route.stretches[n];
-            defer n += 1;
-            if stretch.type == {
-                case .WILDCARD;
-                    str = "";
-                case .PATH;
-                    if !begins_with(str, stretch.text) continue;
-                    str = slice(str, stretch.text.count, str.count);
-                case .PARAM;
-                    end_of_param := find_index_of_any_from_left(str, ROUTE_PATH_SEPARATORS);
-                    if end_of_param < 0 then end_of_param = str.count;
-                    if end_of_param == 0 break;
-                    table_add(*params, route.params[current_param], slice(str, 0, end_of_param));
-                    str = slice(str, end_of_param, str.count);
-                    current_param += 1;
+        // parse query string & ignore it for routing
+        path_without_query_string: string;
+        query_string_begin := find_index_from_left(req.uri.path, #char "?");
+        if query_string_begin >= 0 {
+            path_without_query_string = slice(req.uri.path, 0, query_string_begin);
+            query_string := decode_uri_component(slice(req.uri.path, query_string_begin+1, req.uri.path.count));
+            req.uri.query = query_string;
+            for split(query_string, "&") {
+                second: *string;
+                kv := split(it, "=");
+                if kv.count == {
+                    case 1; second = *kv[0];
+                    case 2; second = *kv[1];
+                }
+                table_set(*req.uri.query_params, kv[0], <<second);
+                param_set(kv[0], <<second);
             }
         }
-        if str == "" && n == route.stretches.count {
-            for params table_set(*req.params, it_index, it);
-            proc = route.proc;
-            break;
+        else path_without_query_string = req.uri.path;
+
+        // routing
+        for route: routes {
+            if req.uri.method != route.method continue;
+            if routes_match_subdomains && req.uri.subdomain != route.subdomain && route.subdomain != "*" continue;
+            table_reset(*params);
+            str := path_without_query_string;
+            n := 0;
+            current_param := 0;
+            end_of_param: int;
+            while str != "" && n < route.stretches.count {
+                stretch := *route.stretches[n];
+                defer n += 1;
+                if stretch.type == {
+                    case .WILDCARD;
+                        str = "";
+                    case .PATH;
+                        if !begins_with(str, stretch.text) continue;
+                        str = slice(str, stretch.text.count, str.count);
+                    case .PARAM;
+                        end_of_param := find_index_of_any_from_left(str, ROUTE_PATH_SEPARATORS);
+                        if end_of_param < 0 then end_of_param = str.count;
+                        if end_of_param == 0 break;
+                        table_add(*params, route.params[current_param], slice(str, 0, end_of_param));
+                        str = slice(str, end_of_param, str.count);
+                        current_param += 1;
+                }
+            }
+            if str == "" && n == route.stretches.count {
+                for params table_set(*req.params, it_index, it);
+                proc = route.proc;
+                break;
+            }
         }
-    }
 
-    // set builtin params
-    set(*req, "HOSTNAME", HOSTNAME);
+        // set builtin params
+        param_set("HOSTNAME", HOSTNAME);
 
-    // Make payload
-    payload: Route.Payload;
-    payload.req = *req;
-    payload.res = *res;
+        // process client
+        for before_routes it();
+        if proc then proc(); else log("No proc...?\n");
+        for after_routes it();
 
-    // process client
-    for before_routes it(payload);
-    if proc then proc(payload); else log("No proc...?\n");
-    for after_routes it(payload);
-
-    // handle unseen toasts
-    if res.toasts.count > 0 && !res.rendered_toasts {
-        builder: String_Builder; defer free_buffers(*builder);
-        first := true;
-        for res.toasts {
-            append(*builder, ifx first then it else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it));
-            if first then first = false;
+        // handle unseen toasts
+        if res.toasts.count > 0 && !res.rendered_toasts {
+            builder: String_Builder; defer free_buffers(*builder);
+            first := true;
+            for res.toasts {
+                append(*builder, ifx first then it else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it));
+                if first then first = false;
+            }
+            cookie_set(UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
         }
-        set_cookie(*res, UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
-    }
-    else unset_cookie(*res, UNSEEN_TOASTS_TOKEN);
+        else cookie_unset(UNSEEN_TOASTS_TOKEN);
 
-    response_string := get_http_response_string(*res);
-    buffer_length := cast(s32) response_string.count;
-    for 0..BUFFER_SIZE buffer[it] = 0;
-    memcpy(buffer.data, response_string.data, buffer_length);
-    buffer[buffer_length] = 0;
-    if send(client.socket, buffer.data, buffer_length, 0) < 0 log("ERROR");
+        response_string := get_http_response_string(*res);
+        buffer_length := cast(s32) response_string.count;
+        for 0..BUFFER_SIZE buffer[it] = 0;
+        memcpy(buffer.data, response_string.data, buffer_length);
+        buffer[buffer_length] = 0;
+        if send(client.socket, buffer.data, buffer_length, 0) < 0 log("ERROR");
+    }
     
     return .CONTINUE;
 }

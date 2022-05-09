@@ -10,28 +10,31 @@ Session :: struct {
 sessions: Table(Session.TOKEN, *Session);
 session_storage: Bucket_Array(Session, SESSIONS_PER_BUCKET, true);
 
-begin_session :: (res: *Response) {
+begin_session :: () {
+    using context.reqres;
     if !res.session {
         session: Session;
         session.token = md5(tprint("%", get_time())); //TODO: lol
         session.locator = bucket_array_add(*session_storage, session);
         res.session = bucket_array_find_pointer(*session_storage, session.locator);
         table_add(*sessions, session.token, res.session);
-        set_cookie(res, SESSION_TOKEN, session.token);
+        cookie_set(SESSION_TOKEN, session.token);
     }
 }
-load_or_begin_session :: (res: *Response, token: Session.TOKEN) {
+load_or_begin_session :: (token: Session.TOKEN) {
+    using context.reqres;
     existing, found := table_find(sessions, token);
     if found && existing {
         res.session = existing;
-        set_cookie(res, SESSION_TOKEN, existing.token);
+        cookie_set(SESSION_TOKEN, existing.token);
     }
-    else begin_session(res);
+    else begin_session();
 }
-end_session :: (res: *Response) {
+end_session :: () {
+    using context.reqres;
     if res.session == null return;
     table_remove(*sessions, res.session.token);
     bucket_array_remove(*session_storage, res.session.locator);
     res.session = null;
-    unset_cookie(res, SESSION_TOKEN);
+    cookie_unset(SESSION_TOKEN);
 }

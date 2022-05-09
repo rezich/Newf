@@ -16,11 +16,7 @@ Route :: struct {
             PARAM;
         }
     }
-    Proc :: #type (Payload);
-    Payload :: struct {
-        req: *Request;
-        res: *Response;
-    }
+    Proc :: #type ();
 }
 
 routes: [..] Route;

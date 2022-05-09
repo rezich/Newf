@@ -10,7 +10,7 @@ check it out
 cd examples\Dorknews
 cp ..\..\lib\sqlite\sqlite3.dll .
 jai Dorknews.jai
-.\Dorknews
+.\www
 ```
 then visit [localhost:8000](localhost:8000).
 
