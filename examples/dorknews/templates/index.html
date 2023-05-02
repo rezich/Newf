@@ -1,0 +1,86 @@
+<html><head><title>%{site_title} — %{page_title}</title><style><!-------------->
+
+html {
+    position: relative;
+}
+body {
+    margin: 0;
+}
+h1, h2 {
+    margin: 0.5em 0;
+}
+.main {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1em;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.header a, .header a:visited {
+    color: inherit;
+}
+.header ul {
+    list-style: none;
+    display: flex;
+    gap: 2ch;
+}
+.header ul > li {
+    display: inline;
+}
+.nav_main {
+    justify-content: flex-start;
+}
+.nav_user {
+    justify-content: flex-end;
+}
+.header_left {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.body {
+    margin: 0 2ch;
+}
+.footer {
+    color: #777;
+}
+form {
+    width: 325px;
+}
+form > div {
+    display: flex;
+    justify-content: space-between;
+}
+.unvisited:visited {
+    color: blue;
+}
+
+</style></head><body><!-------------------------------------------------------->
+
+<div class="main">
+    <div class="header">
+        <div class="header_left">
+            <h1><a href="/">%{site_title}</a></h1>
+            <ul class="nav_main">
+                <!--<li><a href="/newest">Newest</a></li>-->
+                <li><a href="/submit">Submit</a></li>
+            </ul>
+        </div>
+        <div class="header_center toasts">
+%{toasts}
+        </div>
+        <ul class="header_right nav_user">
+%{nav_user}
+        </ul>
+    </div>
+    <div class="body">
+%{body}
+    </div>
+    <hr />
+    <div class="footer">©%{current_year} %{site_title}</div>
+</div>
+</body>
+</html>

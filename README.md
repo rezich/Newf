@@ -1,13 +1,29 @@
 Newf
 ====
-~~check [the example](examples/Dorknews) to see how it works.~~ (example coming soon)
+check [the example](examples/dorknews) to see how it works.
 
 **presently Windows-only.**
+
+
+check it out
+------------
+
+```powershell
+# from this directory:
+cd .. # go up a level
+git clone https://github.com/rezich/SQLite.git # required for the example
+cd Newf\examples\dorknews
+jai dorknews.jai
+.\bin\www
+```
+then visit [localhost:8000](localhost:8000).
+
 
 short-term roadmap
 ------------------
  - add ability for select_from to fetch nested models
  - begin work on migration system
+
 
 long-term roadmap
 -----------------

@@ -1,0 +1,11 @@
+<h2>Log in</h2>
+<form action="/login" method="post">
+    <div><label for="login_name">Name:</label><input name="name" id="login_name" value="%{login_name}" /></div>
+    <div><label for="login_password">Password:</label><input name="password" id="login_password" type="password" value="hunter2" /></div>
+    <div>
+        <div><input type="submit" value="Submit" /></div>
+        <div><input name="remember" id="login_remember" value="remember" type="checkbox" checked/><label for="login_remember">Remember me</label></div>
+    </div>
+    <div>&nbsp;</div>
+    <div><a href="/register" class="unvisited">Register account</a><a href="/recover" class="unvisited">Forgot password?</a></div>
+</form>

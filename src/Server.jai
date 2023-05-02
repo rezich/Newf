@@ -25,11 +25,11 @@ Client :: struct {
     socket: Socket;
 }
 
-listen :: (listen_port: u16=80, $THREADED: bool=false) {
+listen :: (listen_port: u16=80, $POORLY_THREADED: bool=false) {
     using server: Server;
     port = listen_port;
     num_threads := 1;
-    #if THREADED {
+    #if POORLY_THREADED {
         num_cpus := get_number_of_processors();
         #if OS == .WINDOWS || OS == .LINUX then num_cpus /= 2;
         num_threads = max(num_cpus-1, 2);
@@ -39,7 +39,7 @@ listen :: (listen_port: u16=80, $THREADED: bool=false) {
     /* 2 */ ifx num_threads != 1 then "s",
     /* 3 */ port
     );
-    #if THREADED {
+    #if POORLY_THREADED {
         init(*thread_group, num_threads, resolve, enable_work_stealing=true);
         thread_group.name = "server";
         thread_group.logging = true;
@@ -60,9 +60,9 @@ listen :: (listen_port: u16=80, $THREADED: bool=false) {
     }
     if bind(listen_socket, cast(*sockaddr) *server_address, size_of(type_of(server_address))) < 0 { log("Failed to bind port!"); return; }
     if listen(listen_socket, 64) < 0 { log("Failed to listen to port!"); return; }
-    #if THREADED { start(*thread_group); defer shutdown(*thread_group); }
+    #if POORLY_THREADED { start(*thread_group); defer shutdown(*thread_group); }
     length: int;
-    while running { #if THREADED {
+    while running { #if POORLY_THREADED {
         results := get_completed_work(*thread_group);
         for results {
             using r := cast(*Request_Resolution(Client)) it;

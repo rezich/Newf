@@ -1,0 +1,10 @@
+<h2>Register account</h2>
+<form action="/register" method="post">
+    <div><label for="register_name">Name:</label><input name="name" id="register_name" value="%{register_name}" /></div>
+    <div><label for="register_password">Password:</label><input name="password" id="register_password" type="password" /></div>
+    <div><label for="register_password_confirm">Confirm password:</label><input name="password_confirm" id="register_password_confirm" type="password" /></div>
+    <div>
+        <input type="submit" value="Submit" />
+        <div><input name="remember" id="register_remember" value="remember" type="checkbox" checked/><label for="register_remember">Remember me</label></div>
+    </div>
+</form>
