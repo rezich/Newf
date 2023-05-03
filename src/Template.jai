@@ -1,19 +1,16 @@
 Template :: struct {
-    body: string;
+    body:        string;
     params: [..] string;
     pieces: [..] Template_Piece;
 }
 Template_Piece :: struct {
-    type: enum {
-        TEXT;
-        PARAM;
-    }
-    text: string;
+    type:     enum { TEXT; PARAM; }
+    text:     string;
     param_id: int;
 }
 
 templates: Table(string, Template);
-templates_initialized: bool;
+templates_initialized := false;
 
 init_templates :: (relative_template_path: string = "/templates", extension: string = ".html") {
     working_directory := get_working_directory();
@@ -74,6 +71,15 @@ init_templates :: (relative_template_path: string = "/templates", extension: str
         }
         else print("failed to load template: %\n", it);
     }
+    templates_initialized = true;
+}
+
+free_templates :: () {
+    for templates {
+        array_free(it.pieces);
+        array_free(it.params);
+    }
+    deinit(*templates);
 }
 
 render :: (template_name: string, args: ..Any) -> string #must {
@@ -102,14 +108,14 @@ render :: (template_name: string, args: ..Any) -> string #must {
             }
             append(*builder, ifx found then value else ""); // blank if nonexistent might not be the Right Thing To Do, we'll see...
     }
-    return builder_to_string(*builder);
+    return builder_to_string(*builder, allocator=temp);
 }
 render_each :: (items: $T, code: Code, when_empty: string = "") -> string #expand {
     using context.reqres;
     if !items.count return when_empty;
     builder: String_Builder;
     for items #insert,scope() code;
-    return builder_to_string(*builder);
+    return builder_to_string(*builder, allocator=temp);
 
     render_it :: (template_name: string, args: ..Any) #expand {
         append(*`builder, render(template_name, ..args));

@@ -59,6 +59,7 @@ Response :: struct {
 deinit :: (using res: *Response) {
     deinit(*headers);
     deinit(*cookies);
+    array_free(toasts);
 }
 
 
@@ -162,6 +163,11 @@ end_session :: () {
     res.session = null;
     cookie_unset(SESSION_TOKEN);
 }
+free_sessions :: () {
+    for sessions deinit(*it.params);
+    deinit(*sessions);
+    bucket_array_reset(*session_storage);
+}
 
 
 // Route
@@ -188,6 +194,16 @@ Route :: struct {
 
 routes: [..] Route;
 routes_match_subdomains := false;
+
+free_routes :: () {
+    for routes {
+        array_free(it.stretches);
+        array_free(it.params);
+    }
+    array_free(routes);
+    array_free(before_routes);
+    array_free(after_routes);
+}
 
 route :: (method: Request_Method, path: string, proc: Route.Proc) { route(method, "", path, proc); }
 route :: (method: Request_Method, subdomain: string, path: string, proc: Route.Proc) {
@@ -314,15 +330,15 @@ encode_uri_component :: (text: string) -> string {
             if should_encode(text[it]) then print_to_builder(*builder, "%%%1", text[it]);
             else append(*builder, text[it]);
         }
-        return builder_to_string(*builder);
+        return builder_to_string(*builder/*, allocator=temp*/);
         
         should_encode :: (char: u8) -> bool {
             if  (char >= #char "A" && char <= #char "Z") ||
                 (char >= #char "a" && char <= #char "z") ||
                 (char >= #char "0" && char <= #char "9") ||
-                char == #char "-" || char == #char "_" || char == #char "." ||
-                char == #char "!" || char == #char "~" || char == #char "*" ||
-                char == #char "'" || char == #char "(" || char == #char ")"
+                 char == #char "-" || char == #char "_"  || char == #char "." ||
+                 char == #char "!" || char == #char "~"  || char == #char "*" ||
+                 char == #char "'" || char == #char "("  || char == #char ")"
             then return false;
             return true;
         }
@@ -352,7 +368,7 @@ decode_uri_component :: (text: string) -> string {
         else append(*builder, slice(str, next_percent, next_percent + 2));
         str = slice(str, next_percent + 3, str.count);
     }
-    return builder_to_string(*builder);
+    return builder_to_string(*builder/*, allocator=temp*/);
 }
 decode_form :: (text: string) -> string {
     str := text;
@@ -360,16 +376,13 @@ decode_form :: (text: string) -> string {
     return decode_uri_component(str);
 }
 is_hex_number :: inline (c: u32) -> bool {
-    return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_number(c);
+    return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_digit(c);
 }
-is_number :: inline (c: u32) -> bool {
-    return (c >= #char "0" && c <= #char "9");
-}
-xprint :: (args: ..Any) -> string {
+/*xprint :: (args: ..Any) -> string {
     builder: String_Builder;
     for args print_to_builder(*builder, "%", it);
     return builder_to_string(*builder);
-}
+}*/
 
 #load "Server.jai";
 

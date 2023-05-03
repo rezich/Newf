@@ -270,12 +270,26 @@ main :: () {
     not_found :: () { Respond_Index("Not found", render("404"), status=404); }
 
 
-    open_for(listen(8000), "main");
+    open_for(listen(8000, after=#code { flush_cache(); }), "main");
+
+    #if DETECT_LEAKS {
+        array_free(context.sqlite.pragmas);
+        flush_cache(reinit=false);
+        reset_temporary_storage();
+        free_routes();
+        free_templates();
+        free_sessions();
+        memory_visualizer_per_frame_update();
+        report_memory_leaks();
+    }
 }
 
 
-#import "Basic";
+DETECT_LEAKS :: true;
+
+#import "Basic"()(MEMORY_DEBUGGER=DETECT_LEAKS);
 #import "md5";
+Debug :: #import "Debug";
 
 Newf :: #import,dir "../../../../Newf"  (              VERBOSE=true);
         #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);

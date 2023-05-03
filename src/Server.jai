@@ -8,6 +8,8 @@ TIMEOUT_SECONDS :: 10;
 Buffer :: #type [BUFFER_SIZE+1] u8;
 Request_Buffer :: #type [REQUEST_BUFFER_SIZE+1] u8;
 
+server_requested_shutdown := false;
+
 Server :: struct {
     port: u16;
     wsa: WSAData;
@@ -25,7 +27,13 @@ Client :: struct {
     socket: Socket;
 }
 
-listen :: (listen_port: u16=80, $POORLY_THREADED: bool=false) {
+listen :: (
+    listen_port: u16  = 80,
+    before           := #code,null,
+    after            := #code,null,
+    $POORLY_THREADED := false,
+    caller_code      := #caller_code
+) #expand {
     using server: Server;
     port = listen_port;
     num_threads := 1;
@@ -40,9 +48,28 @@ listen :: (listen_port: u16=80, $POORLY_THREADED: bool=false) {
     /* 3 */ port
     );
     #if POORLY_THREADED {
-        init(*thread_group, num_threads, resolve, enable_work_stealing=true);
+        init(*thread_group, num_threads, resolve_in_thread, enable_work_stealing=true);
         thread_group.name = "server";
         thread_group.logging = true;
+    }
+    {   // this goofy thing prevents CTRL+C from killing the server immediately, so we can
+        // clean up and stuff
+        kernel32 :: #system_library "kernel32";
+        SetConsoleCtrlHandler  :: (HandlerRoutine: (fdwCtrlType: u32) -> s32, Add: s32 ) -> s32 #foreign kernel32;
+        Routine :: (fdwCtrlType: u32) -> s32 #c_call {
+            if  fdwCtrlType == xx 0 ||
+                fdwCtrlType == xx 1 ||
+                fdwCtrlType == xx 2 ||
+                fdwCtrlType == xx 5 ||
+                fdwCtrlType == xx 6
+            {
+                write_string("\n\nShutting server down...\n\n");
+                server_requested_shutdown = true;
+                return xx 1;
+            }
+            return xx 0;
+        }
+        SetConsoleCtrlHandler(xx Routine, 1);
     }
     running = true;
     listen_socket, incoming_socket: Socket;
@@ -62,38 +89,44 @@ listen :: (listen_port: u16=80, $POORLY_THREADED: bool=false) {
     if listen(listen_socket, 64) < 0 { log("Failed to listen to port!"); return; }
     #if POORLY_THREADED { start(*thread_group); defer shutdown(*thread_group); }
     length: int;
-    while running { #if POORLY_THREADED {
-        results := get_completed_work(*thread_group);
-        for results {
-            using r := cast(*Request_Resolution(Client)) it;
-            deinit(*req); deinit(*res);
-            free(r);
+    while running && !server_requested_shutdown {
+        #if POORLY_THREADED {
+            results := get_completed_work(*thread_group);
+            for results {
+                using r := cast(*Request_Resolution(Client)) it;
+                deinit(*req); deinit(*res);
+                free(r);
+                #insert,scope(caller_code) after;
+            }
+            length = size_of(type_of(client_address));
+            incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
+            if incoming_socket != INVALID_SOCKET {
+                #insert,scope(caller_code) before;
+                work := New(Request_Resolution(Client));
+                work.client.socket = incoming_socket;
+                add_work(*thread_group, work, tprint("%", incoming_socket));
+            }
+        } else {
+            length = size_of(type_of(client_address));
+            incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
+            if incoming_socket != INVALID_SOCKET {
+                #insert,scope(caller_code) before;
+                using work := New(Request_Resolution(Client));
+                client.socket = incoming_socket;
+                resolve(work);
+                deinit(*req); deinit(*res);
+                free(work);
+                #insert,scope(caller_code) after;
+            }
         }
-        length = size_of(type_of(client_address));
-        incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
-        if incoming_socket != INVALID_SOCKET {
-            work := New(Request_Resolution(Client));
-            work.client.socket = incoming_socket;
-            add_work(*thread_group, work, tprint("%", incoming_socket));
-        }
-    } else {
-        length = size_of(type_of(client_address));
-        incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
-        if incoming_socket != INVALID_SOCKET {
-            using work := New(Request_Resolution(Client));
-            client.socket = incoming_socket;
-            resolve(work);
-            deinit(*req); deinit(*res);
-            free(work);
-        }
-    }}
+    }
 }
 get_http_response_string :: inline (using res: *Response) -> string {
     header_string: string;
     builder: String_Builder;
     for headers append(*builder, tprint("%: %\r\n", it_index, it));
     for cookies append(*builder, tprint("Set-Cookie: %=%\r\n", it_index, it));
-    header_string = builder_to_string(*builder);
+    header_string = builder_to_string(*builder, allocator=temp);
     return tprint("HTTP/1.0 % %\r\n%\r\n%", status, get_http_status_string(status), header_string, body);
 }
 get_http_status_string :: (status: HTTP_Status) -> string {
@@ -129,12 +162,13 @@ get_http_status_string :: (status: HTTP_Status) -> string {
     }
     return "";
 }
-resolve_in_thread :: inline (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Continue_Status {
+resolve_in_thread :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Continue_Status {
     return resolve(cast(*Request_Resolution(Client)) work);
 }
 resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Status {
     using request_resolution;
 
+    defer memory_visualizer_per_frame_update();
     defer reset_temporary_storage();
     defer shutdown(client.socket, SD_BOTH);
 
@@ -143,7 +177,7 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
     start_time := get_time();
     while waiting {
         current_time := get_time();
-        if current_time - start_time >= TIMEOUT_SECONDS { log("timed out."); return .CONTINUE; }
+        if server_requested_shutdown || current_time - start_time >= TIMEOUT_SECONDS { log("timed out."); return .CONTINUE; }
         bytes_received := recv(client.socket, request_buffer.data, REQUEST_BUFFER_SIZE, 0);
         if bytes_received < 0 {
             err := WSAGetLastError();

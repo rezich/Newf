@@ -27,13 +27,11 @@ short-term roadmap
 
 long-term roadmap
 -----------------
+ - better template loading/unloading, so we can have...
  - template hotloading, including graceful, helpful failure
  - static file routing
  - improve HTTP request parsing & make it completely HTTP/1.0 compliant
  - some crazy experimental ideas for interactive tooling
- - expand template syntax
-    - `%{IF cond}`, `%{ELSE}`, `%{ENDIF}` for simple control flow
-    - `%{TEMPLATE template_name arg1 arg2}` to insert a template directly
  - HTTP 1.1
  - linux support
  - Gemini support
