@@ -73,6 +73,7 @@ cookie_get_int :: (key: string) -> value := -1, success: bool=true {
     string_value, key_success := table_find(context.reqres.req.cookies, key);
     if !key_success || string_value == "" return success = false;
     string_value = decode_uri_component(string_value);
+    defer free(string_value.data);
     int_value, parse_success := parse_int(*string_value);
     if !parse_success return success = false;
     return int_value;
@@ -297,15 +298,16 @@ Respond :: (body: string = "", content_type: HTTP_Content_Type=.HTML, status: HT
     res.status = 200;
     `return;
 }
-Redirect :: (to: string, args: ..Any) #expand {
-    using context.reqres;
-    _to := "";
-    if args.count > 0 then _to = tprint(to, ..args); else _to = to;
-    res.status = 302;
-    header_set("Location", _to);
+Redirect :: (to: string, toast_message := "") #expand {
+    if toast_message then toast(toast_message);
+    context.reqres.res.status = 302;
+    header_set("Location", to);
     `return;
 }
-Reroute :: (to: Route.Proc) #expand { to(); `return; }
+Reroute :: (to: Route.Proc, toast_message := "") #expand {
+    if toast_message then toast(toast_message);
+    to(); `return;
+}
 
 
 // Template
@@ -378,11 +380,15 @@ decode_form :: (text: string) -> string {
 is_hex_number :: inline (c: u32) -> bool {
     return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_digit(c);
 }
-/*xprint :: (args: ..Any) -> string {
-    builder: String_Builder;
-    for args print_to_builder(*builder, "%", it);
-    return builder_to_string(*builder);
-}*/
+
+optional_cleanup :: () {
+    reset_temporary_storage();
+    free_routes();
+    free_templates();
+    free_sessions();
+    memory_visualizer_per_frame_update();
+    report_memory_leaks();
+}
 
 #load "Server.jai";
 

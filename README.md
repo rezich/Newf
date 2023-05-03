@@ -19,14 +19,9 @@ jai dorknews.jai
 then visit [localhost:8000](localhost:8000).
 
 
-short-term roadmap
-------------------
- - add ability for select_from to fetch nested models
- - begin work on migration system
-
-
 long-term roadmap
 -----------------
+ - don't require that your website creates a new Session for every single user, because that's crazytown
  - better template loading/unloading, so we can have...
  - template hotloading, including graceful, helpful failure
  - static file routing

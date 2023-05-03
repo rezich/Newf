@@ -23,6 +23,8 @@ Vote :: struct { using #as model: Model;
 
 get_current_year :: () => to_calendar(current_time_consensus()).year;
 
+is_logged_in :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
+
 
 main :: () {
     DATABASE_FILENAME :: "database.db";
@@ -47,9 +49,6 @@ main :: () {
     }, "mock database setup");
 
 
-    using Newf;
-
-
     Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #expand {
         param_set("page_title", page_title);
         param_set("body", body);
@@ -63,9 +62,8 @@ main :: () {
         current_user_id, logged_in := session_get_int("user_id");
         if logged_in {
             user := select_by_id(User, current_user_id) ? #code {
-                toast("Something happened—please log in again.");
                 param_set("nav_user", render("nav_user/default"));
-                Reroute(login_form);
+                Reroute(login_form, "Something happened—please log in again.");
                 //TODO: make sure this works
             };
             param_set("current_user_id", user.id);
@@ -74,11 +72,6 @@ main :: () {
         }
         else param_set("nav_user", render("nav_user/default"));
     });
-
-
-    /*after_route(() {
-        flush_cache();
-    });*/
 
 
     // landing page
@@ -111,11 +104,7 @@ main :: () {
     // new submission form
     route(.GET, "/submit", new_submission_form);
     new_submission_form :: () {
-        _, logged_in := session_get_int("user_id");
-        if !logged_in {
-            toast("You must be logged in to submit a story.");
-            Redirect("/login");
-        }
+        if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
         Respond_Index("Submit story", render("submit"));
     }
 
@@ -139,8 +128,7 @@ main :: () {
 
         submission := insert(new_submission);
 
-        toast("Submission was submitted successfully.");
-        Redirect("/submission/%", submission.id);
+        Redirect(tprint("/submission/%", submission.id), "Submission was submitted successfully.");
     });
 
 
@@ -168,38 +156,32 @@ main :: () {
 
     // login form
     route(.GET, "/login", login_form);
-    login_form :: () { Respond_Index("Log in", render("login")); }
+    login_form :: () {
+        if is_logged_in() then Redirect("/", "You are already logged in!");
+        Respond_Index("Log in", render("login"));
+    }
 
 
     // login process
     route(.POST, "/login", () {
         name, name_given := param_get("name");
-        if !name_given {
-            toast("No user name provided");
-            Reroute(login_form);
-        }
+        if !name_given then Reroute(login_form, "No user name provided");
 
-        user := select_from(User, where="name = ?", name, limit=1) ? #code {
-            toast("User does not exist");
-            Reroute(login_form);
-        };
+        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(login_form, "User does not exist");
 
         password, password_given := param_get("password");
         if !password_given {
-            toast("No password provided.");
             param_set("login_name", name);
-            Reroute(login_form);
+            Reroute(login_form, "No password provided.");
         }
 
         if md5(password) != user.password_hash {
-            toast("Invalid password.");
             param_set("login_name", name);
-            Reroute(login_form);
+            Reroute(login_form, "Invalid password.");
         }
 
         session_set("user_id", user.id);
-        toast("Logged in successfully. 😀"); // we can encode emoji in cookies!
-        Redirect("/");
+        Redirect("/", "Logged in successfully. 😀");
     });
 
 
@@ -211,41 +193,31 @@ main :: () {
     // register process
     route(.POST, "/register", () {
         name, name_given := param_get("name");
-        if !name_given {
-            toast("No user name provided.");
-            Reroute(register_form);
-        }
+        if !name_given then Reroute(register_form, "No user name provided.");
 
-        user := select_from(User, where="name = ?", name, limit=1) ? #code {
-            toast("User name is already taken.");
-            Reroute(register_form);
-        };
+        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(register_form, "User name is already taken.");
 
         password, password_given := param_get("password");
         if !password_given {
-            toast("No password provided.");
             param_set("register_name", name);
-            Reroute(register_form);
+            Reroute(register_form, "No password provided.");
         }
 
         password_confirm, password_confirm_given := param_get("password_confirm");
         if !password_confirm_given {
-            toast("No password confirmation provided.");
             param_set("register_name", name);
-            Reroute(register_form);
+            Reroute(register_form, "No password confirmation provided.");
         }
 
         if password != password_confirm {
-            toast("Password and password confirmation do not match.");
             param_set("register_name", name);
-            Reroute(register_form);
+            Reroute(register_form, "Password and password confirmation do not match.");
         }
 
         new_user := insert(User.{name=name, password_hash=md5(password)});
 
         session_set("user_id", new_user.id);
-        toast("Registered and logged in successfully. 😀");
-        Redirect("/");
+        Redirect("/", "Registered and logged in successfully. 😀");
     });
 
 
@@ -254,8 +226,7 @@ main :: () {
         end_session();
         cookie_unset("saved_name");
         cookie_unset("saved_password");
-        toast("Logged out successfully.");
-        Redirect("/");
+        Redirect("/", "Logged out successfully.");
     });
 
 
@@ -272,26 +243,23 @@ main :: () {
 
     open_for(listen(8000, after=#code { flush_cache(); }), "main");
 
+
     #if DETECT_LEAKS {
-        array_free(context.sqlite.pragmas);
-        flush_cache(reinit=false);
-        reset_temporary_storage();
-        free_routes();
-        free_templates();
-        free_sessions();
-        memory_visualizer_per_frame_update();
-        report_memory_leaks();
+        SQLite.optional_cleanup();
+          Newf.optional_cleanup();
     }
 }
 
 
-DETECT_LEAKS :: true;
+DETECT_LEAKS :: false;
+
 
 #import "Basic"()(MEMORY_DEBUGGER=DETECT_LEAKS);
 #import "md5";
-Debug :: #import "Debug";
 
-Newf :: #import,dir "../../../../Newf"  (              VERBOSE=true);
-        #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);
+
+using Newf   :: #import,dir "../../../../Newf"  (              VERBOSE=true);
+using SQLite :: #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);
+
 
 #add_context db_cache: Database_Cache;

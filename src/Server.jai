@@ -125,7 +125,7 @@ get_http_response_string :: inline (using res: *Response) -> string {
     header_string: string;
     builder: String_Builder;
     for headers append(*builder, tprint("%: %\r\n", it_index, it));
-    for cookies append(*builder, tprint("Set-Cookie: %=%\r\n", it_index, it));
+    for cookies append(*builder, tprint("Set-Cookie: %=%; Path=/\r\n", it_index, it));
     header_string = builder_to_string(*builder, allocator=temp);
     return tprint("HTTP/1.0 % %\r\n%\r\n%", status, get_http_status_string(status), header_string, body);
 }
