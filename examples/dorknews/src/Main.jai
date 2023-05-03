@@ -31,16 +31,8 @@ main :: () {
     (#import "File").file_delete(DATABASE_FILENAME); // delete the databse every run for now
     ORM.init();
 
-
     SQLite.open_for(#code {
-        result: SQLite.Result;
-        user: Cached(User);
-        result, user = insert(User.{name="admin", password_hash=#run md5("hunter2")});
-        submission: Cached(Submission);
-
-        mock_submission :: (headline: string) #expand {
-            `result, `submission = insert(Submission.{submitter=`user, headline=headline, body="Lorem ipsum"});
-        }
+        user := insert(User.{name="admin", password_hash=#run md5("hunter2")});
         for string.[
             "Ask DN: How do you hate on pointless iPhone apps?",
             "Review my startup: www.copymoldyfridgeleftovers.org",
@@ -51,7 +43,7 @@ main :: () {
             "Introducing BushMagic: a Haskell library optimizer",
             "How I turned hating on Megan Fox pictures into a $10 million a year business",
             "An Ebay clone in 10 lines of Python"
-        ] mock_submission(it);
+        ] insert(Submission.{submitter=user, headline=it, body="Lorem ipsum"});
     }, "mock database setup");
 
 
@@ -70,9 +62,7 @@ main :: () {
         param_set("site_title", "Dorknews");
         current_user_id, logged_in := session_get_int("user_id");
         if logged_in {
-            result: SQLite.Result;
-            user: Cached(User);
-            SQLite.open_for(#code { result, user = select_by_id(User, current_user_id); }, "get current user");
+            user := select_by_id(User, current_user_id);
             if !is_null(user) {
                 param_set("current_user_id", user.id);
                 param_set("current_user_name", user.name);
@@ -91,11 +81,7 @@ main :: () {
 
     // landing page
     route(.GET, "/", () {
-        result: SQLite.Result;
-        submissions: [..] Cached(Submission); defer array_free(submissions);
-
-        SQLite.open_for(#code { result, submissions = select_from(Submission); }, "get all submissions for homepage");
-    
+        submissions := select_from(Submission);
         param_set("submissions", render_each(submissions,
             #code { render_it("submission/header", it.id, it.headline); },
             "<em>There are no submissions to display at the moment.</em>"
@@ -109,10 +95,7 @@ main :: () {
         id, id_valid := param_get_int("id");
         if !id_valid then Reroute(not_found);
 
-        result: SQLite.Result;
-        submission: Cached(Submission);
-
-        SQLite.open_for(#code { result, submission = select_by_id(Submission, id); }, "get submission for detail page");
+        submission := select_by_id(Submission, id);
 
         if is_null(submission) then Reroute(not_found);
 
@@ -154,17 +137,7 @@ main :: () {
             Reroute(new_submission_form);
         }
 
-        result: SQLite.Result;
-        submission: Cached(Submission);
-
-        SQLite.open_for(#code { result, submission = insert(new_submission); }, "submission submission");
-
-        if result != .OK {
-            toast("An unexpected error occurred.");
-            param_set("submission_headline", new_submission.headline);
-            param_set("submission_body", new_submission.body);
-            Reroute(new_submission_form);
-        }
+        submission := insert(new_submission);
 
         toast("Submission was submitted successfully.");
         Redirect("/submission/%", submission.id);
@@ -175,21 +148,12 @@ main :: () {
     route(.GET, "/user/:name", () {
         name, _ := param_get("name");
 
-        result: SQLite.Result;
-        user:             Cached(User);
-        users:       [..] Cached(User);       defer array_free(users); //TODO: only retrieve a single row, if possible!
-        submissions: [..] Cached(Submission); defer array_free(submissions);
-        comments:    [..] Cached(Comment);    defer array_free(comments);
+        users       := select_from(User,       where="name = ?",         name       );
+        submissions := select_from(Submission, where="submitter_id = ?", users[0].id);
 
-        SQLite.open_for(#code {
-            result, users       = select_from(User,       where="name = ?",         name);        assert(result == .OK);
-            result, submissions = select_from(Submission, where="submitter_id = ?", users[0].id); assert(result == .OK);
-            //result, comments    = select_from(Comment,    where="commenter_id = ?", users[0].id); assert(result == .OK);
-        }, "get user, submission, comments for user detail page");
+        if !users.count then Reroute(not_found);
 
-        if users.count == 0 then Reroute(not_found);
-
-        user = users[0];
+        user := users[0]; //TODO: get rid of this
 
         param_set("user_name", user.name);
         param_set("user_id", user.id);
@@ -197,7 +161,7 @@ main :: () {
             #code { render_it("submission/header", it.id, it.headline); },
             "<em>This user has not submitted anything.</em>"
         ));
-        param_set("user_comments", render_each(comments,
+        param_set("user_comments", render_each(void.[],
             #code {}, //TODO
             "<em>This user has not written any comments.</em>"
         ));
@@ -219,10 +183,7 @@ main :: () {
             Reroute(login_form);
         }
 
-        result: SQLite.Result;
-        users: [..] Cached(User); defer array_free(users); //TODO: only retrieve a single row, if possible!
-
-        SQLite.open_for(#code { result, users = select_from(User, where="name = ?", name); }, "get user for login");
+        users := select_from(User, where="name = ?", name);
 
         if users.count == 0 {
             toast("User does not exist");
@@ -263,10 +224,7 @@ main :: () {
             Reroute(register_form);
         }
 
-        result: SQLite.Result;
-        users: [..] Cached(User); defer array_free(users); //TODO: only retrieve a single row, if possible!
-
-        SQLite.open_for(#code { result, users = select_from(User, where="name = ?", name); }, "get existing user for register");
+        users := select_from(User, where="name = ?", name);
 
         if users.count != 0 {
             toast("User name is already taken.");
@@ -293,15 +251,7 @@ main :: () {
             Reroute(register_form);
         }
 
-        user: Cached(User);
-
-        SQLite.open_for(#code { result, user = insert(User.{name=name, password_hash=md5(password)}); }, "register user");
-
-        if result != .OK {
-            toast("An unexpected error occurred.");
-            param_set("register_name", name);
-            Reroute(register_form);
-        }
+        user := insert(User.{name=name, password_hash=md5(password)});
 
         session_set("user_id", user.id);
         toast("Registered and logged in successfully. 😀");
@@ -330,13 +280,13 @@ main :: () {
     not_found :: () { Respond_Index("Not found", render("404"), status=404); }
 
 
-    listen(8000);
+    SQLite.open_for(listen(8000), "main");
 }
 
 
 
 
-AssertResultOK :: () #expand { assert(`result == .OK, "%: %", `result, SQLite.errmsg()); }
+
 
 #import "Basic";
 #import "md5";
