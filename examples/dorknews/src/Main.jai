@@ -29,9 +29,9 @@ main :: () {
     context.sqlite.filename = DATABASE_FILENAME;
     set_working_directory((#import "String").path_strip_filename((#import "System").get_path_of_running_executable()));
     (#import "File").file_delete(DATABASE_FILENAME); // delete the databse every run for now
-    ORM.init();
+    init_ORM();
 
-    SQLite.open_for(#code {
+    open_for(#code {
         user := insert(User.{name="admin", password_hash=#run md5("hunter2")});
         for string.[
             "Ask DN: How do you hate on pointless iPhone apps?",
@@ -62,13 +62,15 @@ main :: () {
         param_set("site_title", "Dorknews");
         current_user_id, logged_in := session_get_int("user_id");
         if logged_in {
-            user := select_by_id(User, current_user_id);
-            if !is_null(user) {
-                param_set("current_user_id", user.id);
-                param_set("current_user_name", user.name);
-                param_set("nav_user", render("nav_user/logged_in"));
-            }
-            //TODO: handle failure?
+            user := select_by_id(User, current_user_id) ? #code {
+                toast("Something happened—please log in again.");
+                param_set("nav_user", render("nav_user/default"));
+                Reroute(login_form);
+                //TODO: make sure this works
+            };
+            param_set("current_user_id", user.id);
+            param_set("current_user_name", user.name);
+            param_set("nav_user", render("nav_user/logged_in"));
         }
         else param_set("nav_user", render("nav_user/default"));
     });
@@ -95,9 +97,7 @@ main :: () {
         id, id_valid := param_get_int("id");
         if !id_valid then Reroute(not_found);
 
-        submission := select_by_id(Submission, id);
-
-        if is_null(submission) then Reroute(not_found);
+        submission := select_by_id(Submission, id) ? Reroute(not_found);
 
         Respond_Index(
             submission.headline,
@@ -126,7 +126,7 @@ main :: () {
         headline_given, body_given: bool;
 
         new_submission.headline, headline_given = param_get("headline");
-        if !headline_given then toast("Did not provide headline");
+        if !headline_given then toast("Did not provide headline.");
 
         new_submission.body, body_given = param_get("body");
         if !body_given then toast("Did not provide body.");
@@ -148,12 +148,8 @@ main :: () {
     route(.GET, "/user/:name", () {
         name, _ := param_get("name");
 
-        users       := select_from(User,       where="name = ?",         name       );
-        submissions := select_from(Submission, where="submitter_id = ?", users[0].id);
-
-        if !users.count then Reroute(not_found);
-
-        user := users[0]; //TODO: get rid of this
+        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(not_found);
+        submissions := select_from(Submission, where="submitter_id = ?", user.id);
 
         param_set("user_name", user.name);
         param_set("user_id", user.id);
@@ -162,7 +158,7 @@ main :: () {
             "<em>This user has not submitted anything.</em>"
         ));
         param_set("user_comments", render_each(void.[],
-            #code {}, //TODO
+            #code,null, //TODO
             "<em>This user has not written any comments.</em>"
         ));
 
@@ -183,14 +179,10 @@ main :: () {
             Reroute(login_form);
         }
 
-        users := select_from(User, where="name = ?", name);
-
-        if users.count == 0 {
+        user := select_from(User, where="name = ?", name, limit=1) ? #code {
             toast("User does not exist");
             Reroute(login_form);
-        }
-
-        user := users[0];
+        };
 
         password, password_given := param_get("password");
         if !password_given {
@@ -224,12 +216,10 @@ main :: () {
             Reroute(register_form);
         }
 
-        users := select_from(User, where="name = ?", name);
-
-        if users.count != 0 {
+        user := select_from(User, where="name = ?", name, limit=1) ? #code {
             toast("User name is already taken.");
             Reroute(register_form);
-        }
+        };
 
         password, password_given := param_get("password");
         if !password_given {
@@ -251,9 +241,9 @@ main :: () {
             Reroute(register_form);
         }
 
-        user := insert(User.{name=name, password_hash=md5(password)});
+        new_user := insert(User.{name=name, password_hash=md5(password)});
 
-        session_set("user_id", user.id);
+        session_set("user_id", new_user.id);
         toast("Registered and logged in successfully. 😀");
         Redirect("/");
     });
@@ -280,19 +270,14 @@ main :: () {
     not_found :: () { Respond_Index("Not found", render("404"), status=404); }
 
 
-    SQLite.open_for(listen(8000), "main");
+    open_for(listen(8000), "main");
 }
-
-
-
-
 
 
 #import "Basic";
 #import "md5";
 
-Newf   :: #import,dir "../../../../Newf"  (              VERBOSE=true);
-SQLite :: #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);
-ORM :: SQLite.ORM; using ORM;
+Newf :: #import,dir "../../../../Newf"  (              VERBOSE=true);
+        #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);
 
 #add_context db_cache: Database_Cache;

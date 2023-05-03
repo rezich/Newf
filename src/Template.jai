@@ -108,7 +108,7 @@ render_each :: (items: $T, code: Code, when_empty: string = "") -> string #expan
     using context.reqres;
     if !items.count return when_empty;
     builder: String_Builder;
-    for items { #insert,scope() code; }
+    for items #insert,scope() code;
     return builder_to_string(*builder);
 
     render_it :: (template_name: string, args: ..Any) #expand {
