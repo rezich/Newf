@@ -14,12 +14,20 @@ templates_initialized := false;
 
 init_templates :: (relative_template_path: string = "/templates", extension: string = ".html") {
     working_directory := get_working_directory();
-    template_path := tprint("%1%2", working_directory, relative_template_path);
-    list := file_list(template_path, true); //TODO: rewrite this
-    for list {
-        if !ends_with(it, extension) continue;
-        short_name := replace(replace(it, tprint("%/", template_path), ""), extension, "");
-        contents, success := read_entire_file(it);
+
+    Visitor_Data :: struct { template_path: string; extension: string; }
+    visitor_data := Visitor_Data.{
+        template_path=tprint("%1%2", working_directory, relative_template_path),
+        extension=extension
+    };
+    visitor :: (info: *File_Visit_Info, data: *Visitor_Data) {
+        if !ends_with(info.short_name, data.extension) return;
+        very_short_name := path_strip_extension(slice(info.full_name, data.template_path.count+1, info.full_name.count-data.template_path.count-1));
+        contents: string;
+        success: bool;
+        new_context := context;
+        new_context.allocator = temp;
+        push_context new_context { contents, success = read_entire_file(info.full_name); }
         if success {
             template: Template;
             found: bool;
@@ -39,7 +47,7 @@ init_templates :: (relative_template_path: string = "/templates", extension: str
                 inserting_n: int;
                 found, inserting_n = array_find(template.params, new_param);
                 if !found {
-                    array_add(*template.params, new_param);
+                    array_add(*template.params, copy_string(new_param));
                     inserting_n = n;
                     n += 1;
                 }
@@ -48,7 +56,7 @@ init_templates :: (relative_template_path: string = "/templates", extension: str
                 if text_before.count > 0 {
                     before_text: Template_Piece;
                     before_text.type = .TEXT;
-                    before_text.text = text_before;
+                    before_text.text = copy_string(text_before);
                     array_add(*template.pieces, before_text);
                 }
 
@@ -64,21 +72,27 @@ init_templates :: (relative_template_path: string = "/templates", extension: str
             if text_after.count > 0 {
                 after_text: Template_Piece;
                 after_text.type = .TEXT;
-                after_text.text = text_after;
+                after_text.text = copy_string(text_after);
                 array_add(*template.pieces, after_text);
             }
-            table_add(*templates, short_name, template);
+            table_add(*templates, copy_string(very_short_name), template);
         }
-        else print("failed to load template: %\n", it);
+        else print("failed to load template: %\n", info.short_name);
     }
+    visit_files(visitor_data.template_path, true, *visitor_data, visitor, visit_files=true, visit_directories=false);
     templates_initialized = true;
 }
 
 free_templates :: () {
-    for templates {
+    for * templates {
+        for * it.pieces if it.type ==.TEXT then free(it.text);
         array_free(it.pieces);
+        for * it.params free(it.data);
         array_free(it.params);
+        free(it.body);
+        free(it_index.data);
     }
+    table_reset(*templates);
     deinit(*templates);
 }
 

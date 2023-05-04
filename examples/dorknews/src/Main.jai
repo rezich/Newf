@@ -9,6 +9,7 @@ Submission :: struct { using #as model: Model;
     submitter: Cached(User);
     headline:  string;
     body:      string;
+    score:     int; @do_not_serialize
 }
 
 User :: struct { using #as model: Model;
@@ -25,6 +26,14 @@ get_current_year :: () => to_calendar(current_time_consensus()).year;
 
 is_logged_in :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
 
+The_Algo :: () -> [..] Cached(Submission) {
+    return select_from(Submission, fetch="submitter");
+}
+
+Threaded_Comments_For :: (submission: Cached(Submission)) -> [..] Cached(Comment) {
+    return select_from(Comment, where="submission_id = ?", submission.id, fetch="author");
+}
+
 
 main :: () {
     DATABASE_FILENAME :: "database.db";
@@ -34,7 +43,9 @@ main :: () {
     init_ORM();
 
     open_for(#code {
-        user := insert(User.{name="admin", password_hash=#run md5("hunter2")});
+
+        admin := insert(User.{name="admin", password_hash=#run md5("hunter2")});
+
         for string.[
             "Ask DN: How do you hate on pointless iPhone apps?",
             "Review my startup: www.copymoldyfridgeleftovers.org",
@@ -45,7 +56,33 @@ main :: () {
             "Introducing BushMagic: a Haskell library optimizer",
             "How I turned hating on Megan Fox pictures into a $10 million a year business",
             "An Ebay clone in 10 lines of Python"
-        ] insert(Submission.{submitter=user, headline=it, body="Lorem ipsum"});
+        ] insert(Submission.{
+            submitter=admin,
+            headline=it,
+            body="Lorem ipsum"
+        });
+
+        for submission: select_from(Submission) {
+            Data :: struct { body: string; is_child := false; }
+    
+            parent: Cached(Comment);
+    
+            for Data.[
+                .{ body="first"                 },
+                .{ body="second", is_child=true },
+                .{ body="third",  is_child=true },
+                .{ body="fourth"                } 
+            ] parent = insert(Comment.{
+                submission=submission,
+                parent=ifx it.is_child then parent,
+                author=admin,
+                body=it.body
+            });
+        }
+
+        flush_cache();
+        reset_temporary_storage();
+
     }, "mock database setup");
 
 
@@ -76,10 +113,9 @@ main :: () {
 
     // landing page
     route(.GET, "/", () {
-        submissions := select_from(Submission);
-        param_set("submissions", render_each(submissions,
-            #code { render_it("submission/header", it.id, it.headline); },
-            "<em>There are no submissions to display at the moment.</em>"
+        param_set("submissions", render_each(The_Algo(),
+            #code { render_it("submission/header", it.id, it.headline, it.submitter.name); },
+            "<i>There are no submissions to display at the moment.</i>"
         ));
         Respond_Index("Homepage", render("home"));
     });
@@ -90,14 +126,19 @@ main :: () {
         id, id_valid := param_get_int("id");
         if !id_valid then Reroute(not_found);
 
-        submission := select_by_id(Submission, id) ? Reroute(not_found);
+        submission := select_by_id(Submission, id, fetch="submitter") ? Reroute(not_found);
 
         Respond_Index(
             submission.headline,
             render("submission",
-                render("submission/header", submission.id, submission.headline),
-                render("submission/body", submission.body)
-        ));
+                render("submission/header", submission.id, submission.headline, submission.submitter.name),
+                submission.body,
+                render_each(Threaded_Comments_For(submission),
+                    #code { render_it("comment", it.author.name, it.body); },
+                    "<i>There are no comments on this submission at the moment.</i>"
+                )
+            )
+        );
     });
 
 
@@ -143,11 +184,11 @@ main :: () {
         param_set("user_id", user.id);
         param_set("user_submissions", render_each(submissions,
             #code { render_it("submission/header", it.id, it.headline); },
-            "<em>This user has not submitted anything.</em>"
+            "<i>This user has not submitted anything.</i>"
         ));
-        param_set("user_comments", render_each(void.[],
+        param_set("user_comments", render_each(void.[], //TODO
             #code,null, //TODO
-            "<em>This user has not written any comments.</em>"
+            "<i>This user has not written any comments.</i>"
         ));
 
         Respond_Index(tprint("user %", user.name), render("user"));
@@ -244,22 +285,22 @@ main :: () {
     open_for(listen(8000, after=#code { flush_cache(); }), "main");
 
 
-    #if DETECT_LEAKS {
+    #if DEBUGGING_MEMORY {
         SQLite.optional_cleanup();
           Newf.optional_cleanup();
     }
 }
 
 
-DETECT_LEAKS :: false;
+DEBUGGING_MEMORY :: true;
 
 
-#import "Basic"()(MEMORY_DEBUGGER=DETECT_LEAKS);
+#import "Basic"()(MEMORY_DEBUGGER=DEBUGGING_MEMORY);
 #import "md5";
 
 
-using Newf   :: #import,dir "../../../../Newf"  (              VERBOSE=true);
-using SQLite :: #import,dir "../../../../SQLite"(USE_ORM=true, VERBOSE=true);
+using Newf   :: #import "Newf"  (              VERBOSE=true);
+using SQLite :: #import "SQLite"(USE_ORM=true, VERBOSE=true);
 
 
 #add_context db_cache: Database_Cache;
