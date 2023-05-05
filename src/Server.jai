@@ -21,6 +21,7 @@ Request_Resolution :: struct(Client_Type: Type) {
     req: Request;
     res: Response;
     buffer: Buffer;
+    //cache_settings: Route.Cache_Settings;
 }
 #add_context reqres: *Request_Resolution(Client);
 Client :: struct {
@@ -258,6 +259,9 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
         }
 
         proc: Route.Proc;
+        /*cache_filename := "";
+        should_read_from_cache := false;
+        should_write_to_cache := false;*/
         params: Table(string, string);
         defer deinit(*params);
 
@@ -282,7 +286,7 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
         else path_without_query_string = req.uri.path;
 
         // routing
-        for route: routes {
+        for * route: routes {
             if req.uri.method != route.method continue;
             if routes_match_subdomains && req.uri.subdomain != route.subdomain && route.subdomain != "*" continue;
             table_reset(*params);
@@ -310,6 +314,39 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
             }
             if str == "" && n == route.stretches.count {
                 for params table_set(*req.params, it_index, it);
+
+                /*if route.cache_settings.seconds != 0 {
+                    cache_filename = get_cached_rendering_filename_for_route(route);
+                    path := path_strip_filename(cache_filename);
+                    make_directory_if_it_does_not_exist(path);
+                    now := current_time_consensus();
+                    log(#string XX
+last_cached:                          %1
+cache_settings.seconds:               %2
+last_cached + cache_settings.seconds: %3
+now:                                  %4
+XX,                 /* 1 */ route.last_cached,
+                    /* 2 */ route.cache_settings.seconds,
+                    /* 3 */ route.last_cached + to_apollo(xx route.cache_settings.seconds),
+                    /* 4 */ now
+                    );
+                    if route.last_cached == APOLLO_TIME_INVALID || route.last_cached + to_apollo(xx route.cache_settings.seconds) <= now {
+                        should_write_to_cache = true;
+                    }
+                    else {
+                        if file_exists(cache_filename) {
+                            should_read_from_cache = true;
+                        }
+                        else should_write_to_cache = true;
+                    }
+                    if should_read_from_cache then route.last_cached = now;
+
+                    if should_read_from_cache then log("reading from cache");
+                    if should_write_to_\cache then log("writing to cache");
+
+                    log("route: %\ncache: %", route.path, cache_filename);
+                }*/
+
                 proc = route.proc;
                 break;
             }
@@ -335,7 +372,10 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
         }
         else cookie_unset(UNSEEN_TOASTS_TOKEN);
 
-        response_string := get_http_response_string(*res);
+        response_string : /*string;
+        if should_read_from_cache then response_string = read_entire_file(cache_filename);
+        else response_string*/ = get_http_response_string(*res);
+        //if should_write_to_cache write_entire_file(cache_filename, response_string);
         buffer_length := cast(s32) response_string.count;
         for 0..BUFFER_SIZE buffer[it] = 0;
         memcpy(buffer.data, response_string.data, buffer_length);

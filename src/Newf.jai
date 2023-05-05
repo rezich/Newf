@@ -176,9 +176,13 @@ ROUTE_PATH_SEPARATORS :: "/";
 Route :: struct {
     method: Request_Method;
     subdomain: string;
+    path: string;
     proc: Proc;
     stretches: [..] Stretch;
     params: [..] string;
+
+    //cache_settings: Cache_Settings;
+    //last_cached: Apollo_Time = APOLLO_TIME_INVALID;
 
     Stretch :: struct { // Merriam-Webster, Entry 2, Definition 4a
         type: Type;
@@ -191,10 +195,22 @@ Route :: struct {
         }
     }
     Proc :: #type ();
+    //Cache_Settings :: struct { seconds: int; }
 }
 
 routes: [..] Route;
 routes_match_subdomains := false;
+
+/*get_cached_rendering_filename_for_route :: (route: Route) -> string {
+    // ignoring subdomain for now
+    return tprint("%1%2%3%4%5",
+    /* 1 */ get_working_directory(),
+    /* 2 */ "/cached",
+    /* 3 */ route.path,
+    /* 4 */ ifx ends_with(route.path, "/") then "_",
+    /* 5 */ ".txt"
+    );
+}*/
 
 free_routes :: () {
     for routes {
@@ -206,13 +222,26 @@ free_routes :: () {
     array_free(after_routes);
 }
 
-route :: (method: Request_Method, path: string, proc: Route.Proc) { route(method, "", path, proc); }
-route :: (method: Request_Method, subdomain: string, path: string, proc: Route.Proc) {
+route :: (
+    method: Request_Method,
+    path: string,
+    proc: Route.Proc/*,
+    cache: Route.Cache_Settings = .{}*/
+) { route(method=method, subdomain="", path=path, proc=proc/*, cache=cache*/); }
+route :: (
+    method: Request_Method,
+    subdomain: string,
+    path: string,
+    proc: Route.Proc/*,
+    cache: Route.Cache_Settings = .{}*/
+) {
     if subdomain != "" then routes_match_subdomains = true;
     r: Route;
     r.method = method;
     r.subdomain = subdomain;
+    r.path = path;
     r.proc = proc;
+    //r.cache_settings = cache;
     parse_route_path(*r, path);
 
     array_add(*routes, r);

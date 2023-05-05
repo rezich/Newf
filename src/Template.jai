@@ -96,7 +96,8 @@ free_templates :: () {
     deinit(*templates);
 }
 
-render :: (template_name: string, args: ..Any) -> string #must {
+render :: (template_name: string, args: ..Any, loc := #caller_location) -> string #must {
+    log("%", loc);
     using context.reqres;
     if !templates_initialized init_templates();
     template := table_find_pointer(*templates, template_name);

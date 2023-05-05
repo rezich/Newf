@@ -32,7 +32,7 @@ route(.GET, "/", () {
         "<i>There are no submissions to display at the moment.</i>"
     ));
     Respond_Index("Homepage", render("home"));
-});
+}/*, cache=.{20}*/); // cache does not work yet
 
 
 // submission detail

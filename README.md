@@ -8,9 +8,8 @@ check [the example](examples/dorknews) to see how it works.
 check it out
 ------------
 
-```powershell
-# from this directory:
-cd .. # go up a level
+```sh
+git clone https://github.com/rezich/Newf.git
 git clone https://github.com/rezich/SQLite.git # required for the example
 cd Newf\examples\dorknews
 jai dorknews.jai
@@ -22,7 +21,6 @@ then visit [localhost:8000](localhost:8000).
 TODO
 ====
  - caching on routes!
- - don't require that your website creates a new Session for every single user, because that's crazytown
  - better template loading/unloading, so we can have...
  - template hotloading, including graceful, helpful failure
  - static file routing
