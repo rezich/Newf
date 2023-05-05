@@ -19,8 +19,9 @@ jai dorknews.jai
 then visit [localhost:8000](localhost:8000).
 
 
-long-term roadmap
------------------
+TODO
+====
+ - caching on routes!
  - don't require that your website creates a new Session for every single user, because that's crazytown
  - better template loading/unloading, so we can have...
  - template hotloading, including graceful, helpful failure

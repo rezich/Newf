@@ -24,12 +24,12 @@ ENTRY_POINT :: "src/Main.jai";
     
         SQL.build_step(message);
     
-        if message.kind == .FAILED_IMPORT {
+        /*if message.kind == .FAILED_IMPORT {
             m := cast(*Message_Failed_Import) message;
             if m.target_module_name == "Newf" || m.target_module_name == "SQLite"
                 provide_import(message.workspace, m, .PATH_TO_DIRECTORY, join(#filepath, "../../../", m.target_module_name));
             continue;
-        }
+        }*/
     }
 
     compiler_end_intercept(w);

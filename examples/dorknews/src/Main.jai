@@ -1,306 +1,126 @@
+BUILD : enum { DEVELOPING; DEPLOYING; } : .DEVELOPING;
+
+
 Comment :: struct { using #as model: Model;
-    submission: Cached(Submission);
-    parent:     Cached(Comment);
-    author:     Cached(User);
-    body:       string;
+    submission:    Cached(Submission);
+    parent:        Cached(Comment);
+    author:        Cached(User); @autofetch
+    body:          string;
+    children: [..] Cached(Comment); @do_not_serialize
 }
 
+
 Submission :: struct { using #as model: Model;
-    submitter: Cached(User);
+    submitter: Cached(User); @autofetch
     headline:  string;
     body:      string;
     score:     int; @do_not_serialize
 }
+render_comments_for :: (submission: Cached(Submission)) -> string {
+    return render_each(get_threaded_comments_for(submission),
+        #code { render_it("comment", it.author.name, it.body, `render_children_of(it)); },
+        "<i>There are no comments on this submission at the moment.</i>"
+    );
+
+    render_children_of :: (comment: Cached(Comment)) -> string {
+        return render_each(comment.children,
+            #code { render_it("comment", it.author.name, it.body, `render_children_of(it)); }
+        );
+    }
+    // this is probably not the best way to do this
+    get_threaded_comments_for :: (submission: Cached(Submission)) -> [..] Cached(Comment) {
+        all_comments_for_submission := select_from(Comment, where="submission_id = ?", submission.id);
+        unthreaded_comments, threaded_comments: [..] Cached(Comment);
+        unthreaded_comments.allocator = temp; // bleh
+        threaded_comments.allocator = temp; // bleh
+        array_copy(*unthreaded_comments, all_comments_for_submission);
+        for unthreaded_comments if is_null(it.parent) {
+            array_add(*threaded_comments, it);
+            remove it;
+        }
+        unthreaded_comments_count_last_time := unthreaded_comments.count;
+        while unthreaded_comments.count > 0 {
+            for unthreaded, unthreaded_index: unthreaded_comments
+            for   threaded,   threaded_index:   threaded_comments
+            if  unthreaded.parent       ==      threaded {
+                threaded.pointer.children.allocator = temp;
+                array_add(*threaded.children, unthreaded);
+                array_add(*threaded_comments, unthreaded);
+                remove unthreaded;
+            }
+            assert(unthreaded_comments.count != unthreaded_comments_count_last_time, "this should never happen");
+            unthreaded_comments_count_last_time = unthreaded_comments.count;
+        }
+        for threaded_comments if !is_null(it.parent) then remove it;
+        return threaded_comments;
+    }
+}
+
 
 User :: struct { using #as model: Model;
     name:          string;
     password_hash: string;
 }
 
+
 Vote :: struct { using #as model: Model;
     user:       Cached(User);
-    submission: Cached(Submission);
+    sumission: Cached(Submission);
 }
+
 
 get_current_year :: () => to_calendar(current_time_consensus()).year;
+is_logged_in     :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
 
-is_logged_in :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
 
-The_Algo :: () -> [..] Cached(Submission) {
-    return select_from(Submission, fetch="submitter");
+The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
+    return select_from(Submission, order_by=.{"created", .DESC});
 }
 
-Threaded_Comments_For :: (submission: Cached(Submission)) -> [..] Cached(Comment) {
-    return select_from(Comment, where="submission_id = ?", submission.id, fetch="author");
+
+//TODO: get rid of this!
+Get_Logged_In_User :: () -> Cached(User) {
+    id := session_get_int("user_id");
+    if id == -1 then return .{};
+    return select_by_id(User, id);
 }
 
 
 main :: () {
     DATABASE_FILENAME :: "database.db";
     context.sqlite.filename = DATABASE_FILENAME;
+
     set_working_directory((#import "String").path_strip_filename((#import "System").get_path_of_running_executable()));
-    (#import "File").file_delete(DATABASE_FILENAME); // delete the databse every run for now
-    init_ORM();
+    #if BUILD == .DEVELOPING then (#import "File").file_delete(DATABASE_FILENAME); // delete the databse every run for now
 
-    open_for(#code {
-
-        admin := insert(User.{name="admin", password_hash=#run md5("hunter2")});
-
-        for string.[
-            "Ask DN: How do you hate on pointless iPhone apps?",
-            "Review my startup: www.copymoldyfridgeleftovers.org",
-            "Introducing MetalBloat: a WebGL library add-on",
-            "A fully functional POSIX-compliant 64-bit multitasking operating system in 14 lines of Ruby",
-            "How I turned coding Vanilla Ice Tour '91 merchandise into a $14 million a year business",
-            "Ask DN: Am I crazy to try to market panda breeding technology?",
-            "Introducing BushMagic: a Haskell library optimizer",
-            "How I turned hating on Megan Fox pictures into a $10 million a year business",
-            "An Ebay clone in 10 lines of Python"
-        ] insert(Submission.{
-            submitter=admin,
-            headline=it,
-            body="Lorem ipsum"
-        });
-
-        for submission: select_from(Submission) {
-            Data :: struct { body: string; is_child := false; }
-    
-            parent: Cached(Comment);
-    
-            for Data.[
-                .{ body="first"                 },
-                .{ body="second", is_child=true },
-                .{ body="third",  is_child=true },
-                .{ body="fourth"                } 
-            ] parent = insert(Comment.{
-                submission=submission,
-                parent=ifx it.is_child then parent,
-                author=admin,
-                body=it.body
-            });
-        }
-
-        flush_cache();
-        reset_temporary_storage();
-
-    }, "mock database setup");
-
-
-    Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #expand {
-        param_set("page_title", page_title);
-        param_set("body", body);
-        Respond(render("index"), status=status);
+    init_model_cache();
+    #if BUILD == .DEVELOPING {
+        #load "Mock_Database.jai";
+        mock_database();
     }
 
+    #load "Routes.jai";
+    set_routes();
 
-    before_route(() {
-        param_set("current_year", to_calendar(current_time_consensus()).year);
-        param_set("site_title", "Dorknews");
-        current_user_id, logged_in := session_get_int("user_id");
-        if logged_in {
-            user := select_by_id(User, current_user_id) ? #code {
-                param_set("nav_user", render("nav_user/default"));
-                Reroute(login_form, "Something happened—please log in again.");
-                //TODO: make sure this works
-            };
-            param_set("current_user_id", user.id);
-            param_set("current_user_name", user.name);
-            param_set("nav_user", render("nav_user/logged_in"));
-        }
-        else param_set("nav_user", render("nav_user/default"));
-    });
+    open_for(listen(8000, after=#code { reset_model_cache(); }), "main");
 
 
-    // landing page
-    route(.GET, "/", () {
-        param_set("submissions", render_each(The_Algo(),
-            #code { render_it("submission/header", it.id, it.headline, it.submitter.name); },
-            "<i>There are no submissions to display at the moment.</i>"
-        ));
-        Respond_Index("Homepage", render("home"));
-    });
-
-
-    // submission detail
-    route(.GET, "/submission/:id", () {
-        id, id_valid := param_get_int("id");
-        if !id_valid then Reroute(not_found);
-
-        submission := select_by_id(Submission, id, fetch="submitter") ? Reroute(not_found);
-
-        Respond_Index(
-            submission.headline,
-            render("submission",
-                render("submission/header", submission.id, submission.headline, submission.submitter.name),
-                submission.body,
-                render_each(Threaded_Comments_For(submission),
-                    #code { render_it("comment", it.author.name, it.body); },
-                    "<i>There are no comments on this submission at the moment.</i>"
-                )
-            )
-        );
-    });
-
-
-    // new submission form
-    route(.GET, "/submit", new_submission_form);
-    new_submission_form :: () {
-        if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
-        Respond_Index("Submit story", render("submit"));
-    }
-
-
-    // submission submission
-    route(.POST, "/submit", () {
-        new_submission: Submission;
-        headline_given, body_given: bool;
-
-        new_submission.headline, headline_given = param_get("headline");
-        if !headline_given then toast("Did not provide headline.");
-
-        new_submission.body, body_given = param_get("body");
-        if !body_given then toast("Did not provide body.");
-
-        if !headline_given || !body_given {
-            param_set("submission_headline", new_submission.headline);
-            param_set("submission_body", new_submission.body);
-            Reroute(new_submission_form);
-        }
-
-        submission := insert(new_submission);
-
-        Redirect(tprint("/submission/%", submission.id), "Submission was submitted successfully.");
-    });
-
-
-    // user detail
-    route(.GET, "/user/:name", () {
-        name, _ := param_get("name");
-
-        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(not_found);
-        submissions := select_from(Submission, where="submitter_id = ?", user.id);
-
-        param_set("user_name", user.name);
-        param_set("user_id", user.id);
-        param_set("user_submissions", render_each(submissions,
-            #code { render_it("submission/header", it.id, it.headline); },
-            "<i>This user has not submitted anything.</i>"
-        ));
-        param_set("user_comments", render_each(void.[], //TODO
-            #code,null, //TODO
-            "<i>This user has not written any comments.</i>"
-        ));
-
-        Respond_Index(tprint("user %", user.name), render("user"));
-    });
-
-
-    // login form
-    route(.GET, "/login", login_form);
-    login_form :: () {
-        if is_logged_in() then Redirect("/", "You are already logged in!");
-        Respond_Index("Log in", render("login"));
-    }
-
-
-    // login process
-    route(.POST, "/login", () {
-        name, name_given := param_get("name");
-        if !name_given then Reroute(login_form, "No user name provided");
-
-        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(login_form, "User does not exist");
-
-        password, password_given := param_get("password");
-        if !password_given {
-            param_set("login_name", name);
-            Reroute(login_form, "No password provided.");
-        }
-
-        if md5(password) != user.password_hash {
-            param_set("login_name", name);
-            Reroute(login_form, "Invalid password.");
-        }
-
-        session_set("user_id", user.id);
-        Redirect("/", "Logged in successfully. 😀");
-    });
-
-
-    // register form
-    route(.GET, "/register", register_form);
-    register_form :: () { Respond_Index("Register account", render("register")); }
-
-
-    // register process
-    route(.POST, "/register", () {
-        name, name_given := param_get("name");
-        if !name_given then Reroute(register_form, "No user name provided.");
-
-        user := select_from(User, where="name = ?", name, limit=1) ? Reroute(register_form, "User name is already taken.");
-
-        password, password_given := param_get("password");
-        if !password_given {
-            param_set("register_name", name);
-            Reroute(register_form, "No password provided.");
-        }
-
-        password_confirm, password_confirm_given := param_get("password_confirm");
-        if !password_confirm_given {
-            param_set("register_name", name);
-            Reroute(register_form, "No password confirmation provided.");
-        }
-
-        if password != password_confirm {
-            param_set("register_name", name);
-            Reroute(register_form, "Password and password confirmation do not match.");
-        }
-
-        new_user := insert(User.{name=name, password_hash=md5(password)});
-
-        session_set("user_id", new_user.id);
-        Redirect("/", "Registered and logged in successfully. 😀");
-    });
-
-
-    // logout
-    route(.GET, "/logout", () {
-        end_session();
-        cookie_unset("saved_name");
-        cookie_unset("saved_password");
-        Redirect("/", "Logged out successfully.");
-    });
-
-
-    // favicon
-    route(.GET, "/favicon.ico", () {
-        Respond(status=404);
-    });
-
-
-    // catch-all 404
-    route(.GET, "*", "*", not_found);
-    not_found :: () { Respond_Index("Not found", render("404"), status=404); }
-
-
-    open_for(listen(8000, after=#code { flush_cache(); }), "main");
-
-
-    #if DEBUGGING_MEMORY {
+    #if BUILD == .DEVELOPING {
         SQLite.optional_cleanup();
           Newf.optional_cleanup();
     }
 }
 
 
-DEBUGGING_MEMORY :: true;
+DEBUG_MEMORY, VERBOSE :: BUILD == .DEVELOPING;
 
 
-#import "Basic"()(MEMORY_DEBUGGER=DEBUGGING_MEMORY);
+#import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
 #import "md5";
 
 
-using Newf   :: #import "Newf"  (              VERBOSE=true);
-using SQLite :: #import "SQLite"(USE_ORM=true, VERBOSE=true);
+using Newf   :: #import,dir "../../../../Newf"  (VERBOSE=VERBOSE);
+using SQLite :: #import,dir "../../../../SQLite"(VERBOSE=VERBOSE, USE_MODEL_CACHE=true);
 
 
-#add_context db_cache: Database_Cache;
+#add_context sqlite_model_cache: SQLite_Model_Cache;
