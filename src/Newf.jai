@@ -300,21 +300,6 @@ after_routes:  [..] Route.Proc;
 before_route :: inline (proc: Route.Proc) { array_add(*before_routes, proc); }
 after_route  :: inline (proc: Route.Proc) { array_add(*after_routes,  proc); }
 
-param_get :: (key: string) -> value := "", success := true {
-    value, success := table_find(*context.reqres.req.params, key);
-    if !success return success = false;
-    return value, success = value != "";
-}
-param_get_int :: (key: string) -> value := -1, success: bool=true {
-    string_value, key_success := table_find(*context.reqres.req.params, key);
-    if !key_success || string_value == "" return success = false;
-    int_value, parse_success := parse_int(*string_value);
-    if !parse_success return success = false;
-    return int_value;
-}
-param_set :: inline (key: string, value: Any)    { param_set(key, tprint("%", value)); }
-param_set :: inline (key: string, value: string) { table_set(*context.reqres.req.params, key, value); }
-
 Respond :: (body: string = "", content_type: HTTP_Content_Type=.HTML, status: HTTP_Status=200) #expand {
     using context.reqres;
     content_type_string: string;
@@ -413,10 +398,7 @@ is_hex_number :: inline (c: u32) -> bool {
 optional_cleanup :: () {
     reset_temporary_storage();
     free_routes();
-    free_templates();
     free_sessions();
-    memory_visualizer_per_frame_update();
-    report_memory_leaks();
 }
 
 #load "Server.jai";

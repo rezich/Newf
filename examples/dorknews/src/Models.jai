@@ -3,8 +3,15 @@ Comment :: struct { using #as model: Model;
     parent:        Cached(Comment);
     author:        Cached(User); @autofetch
     body:          string;
-    children: [..] Cached(Comment); @do_not_serialize
+    //comments: [..] Cached(Comment); @do_not_serialize
 }
+
+Comment_With_Threaded_Comments :: struct {
+    using comment: Cached(Comment);
+    threaded_comments: [..] Comment_With_Threaded_Comments;
+}
+
+
 
 
 Submission :: struct { using #as model: Model;
@@ -13,51 +20,66 @@ Submission :: struct { using #as model: Model;
     body:      string;
     score:     int; @do_not_serialize
 }
-render_comments_for :: (submission: Cached(Submission)) -> string {
-    return render_each(get_threaded_comments_for(submission),
-        #code { render_it("comment", it.author.name, it.body, `render_children_of(it)); },
-        "<i>There are no comments on this submission at the moment.</i>"
-    );
 
-    render_children_of :: (comment: Cached(Comment)) -> string {
-        return render_each(comment.children,
-            #code { render_it("comment", it.author.name, it.body, `render_children_of(it)); }
-        );
-    }
+Submission_With_Threaded_Comments :: struct {
+    using submission: Cached(Submission);
+    threaded_comments: [..] Comment_With_Threaded_Comments;
+}
+Render_With_Threaded_Comments :: (submission: Cached(Submission)) -> string {
+    return Render("submission", Submission_With_Threaded_Comments.{
+        submission=submission,
+        threaded_comments=Get_Threaded_Comments_For(submission)
+    });
+
     // this is probably not the best way to do this
-    get_threaded_comments_for :: (submission: Cached(Submission)) -> [..] Cached(Comment) {
+    Get_Threaded_Comments_For :: (submission: Cached(Submission)) -> [..] Comment_With_Threaded_Comments {
+
         all_comments_for_submission := select_from(Comment, where="submission_id = ?", submission.id);
-        unthreaded_comments, threaded_comments: [..] Cached(Comment);
+        for all_comments_for_submission log("%", it);
+        unthreaded_comments: [..] Cached(Comment);
         unthreaded_comments.allocator = temp; // bleh
+          threaded_comments: [..] Comment_With_Threaded_Comments;
           threaded_comments.allocator = temp; // bleh
         array_copy(*unthreaded_comments, all_comments_for_submission);
         for unthreaded_comments if is_null(it.parent) {
-            array_add(*threaded_comments, it);
+            array_add(*threaded_comments, .{comment=it});
             remove it;
         }
         unthreaded_comments_count_last_time := unthreaded_comments.count;
-        while unthreaded_comments.count > 0 {
+        while the_loop := unthreaded_comments.count > 0 {
+            defer unthreaded_comments_count_last_time = unthreaded_comments.count;
+            defer assert(unthreaded_comments.count != unthreaded_comments_count_last_time, "this should never happen: %", unthreaded_comments.count);
+
+            log("--- --- ---");
             for unthreaded, unthreaded_index: unthreaded_comments
-            for   threaded,   threaded_index:   threaded_comments
-            if  unthreaded.parent       ==      threaded {
-                threaded.pointer.children.allocator = temp;
-                array_add(*threaded.children, unthreaded);
-                array_add(*threaded_comments, unthreaded);
-                remove unthreaded;
+            for * threaded,   threaded_index:   threaded_comments {
+                log("---");
+                log("UNTHREADED COUNT: %\nSINCE LAST TIME: %", unthreaded_comments.count, unthreaded_comments_count_last_time);
+                log("UNTHREADED COMMENT: %\nUNTHREADED  PARENT: %\n  THREADED COMMENT: %\n---\n                ==: %", unthreaded, unthreaded.parent, threaded.comment, unthreaded.parent == threaded.comment);
+                if  unthreaded.parent       ==      threaded.comment {
+                    newly_threaded := Comment_With_Threaded_Comments.{comment=unthreaded};
+                    newly_threaded.threaded_comments.allocator = temp;
+                    array_add(*threaded.threaded_comments, newly_threaded);
+                    array_add(         *threaded_comments, newly_threaded); // temporary, until the end
+                    remove unthreaded;
+                    continue the_loop;
+                }
             }
-            assert(unthreaded_comments.count != unthreaded_comments_count_last_time, "this should never happen");
-            unthreaded_comments_count_last_time = unthreaded_comments.count;
         }
-        for threaded_comments if !is_null(it.parent) then remove it;
+        for threaded_comments if !is_null(it.comment.parent) then remove it;
         return threaded_comments;
     }
 }
+
+
 
 
 User :: struct { using #as model: Model;
     name:          string;
     password_hash: string;
 }
+
+
 
 
 Vote :: struct { using #as model: Model;

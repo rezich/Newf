@@ -15,8 +15,7 @@ ENTRY_POINT :: "src/Main.jai";
     compiler_begin_intercept(w);
     add_build_file(ENTRY_POINT, w);
 
-     SQL.prebuild_step(w);
-    Newf.prebuild_step(w);
+    SQL.prebuild_step(w);
 
     while true {
         message := compiler_wait_for_message();
@@ -40,5 +39,4 @@ ENTRY_POINT :: "src/Main.jai";
 #import "String";
 #import "Compiler";
 
-Newf :: #import,dir "../../../Newf"  (FROM_METAPROGRAM=true);
-SQL  :: #import,dir "../../../SQLite"(FROM_METAPROGRAM=true);
+SQL :: #import,dir "../../../SQLite"(FROM_METAPROGRAM=true);

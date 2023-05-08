@@ -1,37 +1,49 @@
+is_logged_in     :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
+
 set_routes :: () {
 
 Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #expand {
-    param_set("page_title", page_title);
-    param_set("body", body);
-    Respond(render("index"), status=status);
+    Index :: struct {
+        site_title:   string;
+        page_title:   string;
+        toasts:    [] string;
+        nav_user:     string;
+        body:         string;
+        current_year: int;
+    }
+    Respond(Render("index", Index.{
+        site_title="Dorknews",
+        page_title=page_title,
+        toasts=context.reqres.res.toasts,
+        nav_user=param_get("nav_user"),
+        body=body,
+        current_year=to_calendar(current_time_consensus()).year
+    }), status=status);
 }
 
 
 before_route(() {
     param_set("current_year", to_calendar(current_time_consensus()).year);
     param_set("site_title", "Dorknews");
-    current_user_id, logged_in := session_get_int("user_id");
+    /*current_user_id, logged_in := session_get_int("user_id");
     if logged_in {
         user := select_by_id(User, current_user_id) ? #code {
-            param_set("nav_user", render("nav_user/default"));
+            param_set("nav_user", Render("nav_user/default"));
             Reroute(login_form, "Something happened—please log in again.");
             //TODO: make sure this works
-        };
+        }; 
         param_set("current_user_id", user.id);
         param_set("current_user_name", user.name);
         param_set("nav_user", render("nav_user/logged_in"));
     }
-    else param_set("nav_user", render("nav_user/default"));
+    else param_set("nav_user", render("nav_user/default"));*/
+    param_set("nav_user", "");
 });
 
 
 // landing page
 route(.GET, "/", () {
-    param_set("submissions", render_each(The_Algo(),
-        #code { render_it("submission/header", it.id, it.headline, it.submitter.name); },
-        "<i>There are no submissions to display at the moment.</i>"
-    ));
-    Respond_Index("Homepage", render("home"));
+    Respond_Index("Homepage", Render("submission/header", The_Algo()));
 }/*, cache=.{20}*/); // cache does not work yet
 
 
@@ -44,20 +56,16 @@ route(.GET, "/submission/:id", () {
 
     Respond_Index(
         submission.headline,
-        render("submission",
-            render("submission/header", submission.id, submission.headline, submission.submitter.name),
-            submission.body,
-            render_comments_for(submission)
-        )
+        Render_With_Threaded_Comments(submission)
     );
 });
 
-
+/*
 // submission form
 route(.GET, "/submit", new_submission_form);
 new_submission_form :: () {
     if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
-    Respond_Index("Submit story", render("submit"));
+    Respond_Index("Submit story", Render("submit"));
 }
 
 
@@ -181,7 +189,7 @@ route(.GET, "/logout", () {
     cookie_unset("saved_name");
     cookie_unset("saved_password");
     Redirect("/", "Logged out successfully.");
-});
+});*/
 
 
 // favicon
@@ -192,6 +200,6 @@ route(.GET, "/favicon.ico", () {
 
 // catch-all 404
 route(.GET, "*", "*", not_found);
-not_found :: () { Respond_Index("Not found", render("404"), status=404); }
+not_found :: () { Respond_Index("Not found", Render("404"), status=404); }
 
 }

@@ -2,10 +2,7 @@ BUILD : enum { DEVELOPING; DEPLOYING; } : .DEVELOPING;
 
 
 #load "Models.jai";
-
-
-get_current_year :: () => to_calendar(current_time_consensus()).year;
-is_logged_in     :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
+#load "State.jai";
 
 
 The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
@@ -43,6 +40,8 @@ main :: () {
     #if BUILD == .DEVELOPING {
         SQLite.optional_cleanup();
           Newf.optional_cleanup();
+        memory_visualizer_per_frame_update();
+        report_memory_leaks();
     }
 }
 

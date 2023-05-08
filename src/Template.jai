@@ -1,140 +1,175 @@
 Template :: struct {
+    name:        string;
+    filename:    string;
     body:        string;
-    params: [..] string;
-    pieces: [..] Template_Piece;
+    pieces: [..] struct {
+        type:     enum { TEXT; PARAM; }
+        text:     string;
+    };
 }
-Template_Piece :: struct {
-    type:     enum { TEXT; PARAM; }
-    text:     string;
-    param_id: int;
+
+Render :: (
+   $template_name: string,
+              loc:=#caller_location,
+      caller_code:=#caller_code
+) -> string {
+    return Render(template_name, void);
+}
+
+Render :: (
+           __data: $T,
+   $template_name: string,
+              loc:=#caller_location,
+      caller_code:=#caller_code
+) -> string
+#modify { return (cast(*Type_Info) T).type != .STRING; } #expand {
+    return Render(template_name, __data, loc, caller_code);
+}
+
+Render :: (
+   $template_name: string,
+           __data: $T,
+              loc:=#caller_location,
+      caller_code:=#caller_code
+) -> string #expand {
+    sb: String_Builder;
+    if (cast(*Type_Info) T).type != .VOID then #insert -> string {
+
+        template := get_or_load_template(template_name);
+        assert(!!template, "TEMPLATE NOT FOUND: [%]", template_name);
+        
+        sb: String_Builder;
+        print_to_builder(*sb, #string XX
+%1 {
+XX,     /* 1 */ ifx (cast(*Type_Info) T).type == .ARRAY "for __data: __data");
+        for template.pieces if it.type == {
+            case .TEXT;
+                str := #string XX_OUTER_XX
+    {
+        __str := #string XX_INNER_XX
+%1
+XX_INNER_XX;
+        __str.count -= 1;
+        append(*sb, __str);
+    }
+XX_OUTER_XX;
+                str.count -= 1;
+                print_to_builder(*sb, str, it.text);
+            case .PARAM;
+                if (cast(*Type_Info) T).type != .VOID {
+                param_name := it.text;
+                print_to_builder(*sb, #string XX
+    print_to_builder(*sb, "%%", __data.%1);
+XX,            /* 1 */ param_name);
+                }
+        }
+        append(*sb, #string XX
+}
+XX);
+        return builder_to_string(*sb);
+    }
+    return builder_to_string(*sb);
 }
 
 templates: Table(string, Template);
-templates_initialized := false;
 
-init_templates :: (relative_template_path: string = "/templates", extension: string = ".html") {
-    working_directory := get_working_directory();
+//TODO: make %{threaded_comments -> {comment}} (pass the struct member threaded_comments to the template called comment) work!
 
-    Visitor_Data :: struct { template_path: string; extension: string; }
-    visitor_data := Visitor_Data.{
-        template_path=tprint("%1%2", working_directory, relative_template_path),
-        extension=extension
-    };
-    visitor :: (info: *File_Visit_Info, data: *Visitor_Data) {
-        if !ends_with(info.short_name, data.extension) return;
-        very_short_name := path_strip_extension(slice(info.full_name, data.template_path.count+1, info.full_name.count-data.template_path.count-1));
-        contents: string;
-        success: bool;
-        new_context := context;
-        new_context.allocator = temp;
-        push_context new_context { contents, success = read_entire_file(info.full_name); }
-        if success {
-            template: Template;
-            found: bool;
-            n := 0;
-            
-            while true {
-                start := find_index_from_left(contents, "%{");
-                if start < 0 break;
-                
-                remaining_contents := slice(contents, start, contents.count);
-                end := find_index_from_left(remaining_contents, "}");
-                if end < 0 break;
-                end += contents.count - remaining_contents.count;
+get_or_load_template :: (name: string, relative_template_path: string = "/templates", extension: string = ".html") -> *Template {
+    PARSE_STRING_BEGIN   :: "%{";
+    PARSE_STRING_END     :: "}";
+    INCLUDE_STRING_BEGIN :: "{";
+    INCLUDE_STRING_END   :: "}";
 
-                new_param := slice(contents, start + 2, end - start - 2);
-                
-                inserting_n: int;
-                found, inserting_n = array_find(template.params, new_param);
-                if !found {
-                    array_add(*template.params, copy_string(new_param));
-                    inserting_n = n;
-                    n += 1;
-                }
-                
-                text_before := slice(contents, 0, start);
-                if text_before.count > 0 {
-                    before_text: Template_Piece;
-                    before_text.type = .TEXT;
-                    before_text.text = copy_string(text_before);
-                    array_add(*template.pieces, before_text);
-                }
+    existing_template := table_find_pointer(*templates, name);
+    if !!existing_template then return existing_template;
 
-                param: Template_Piece;
-                param.type = .PARAM;
-                param.param_id = inserting_n;
-                array_add(*template.pieces, param);
+    new_template := table_add(*templates, name, .{});
 
-                contents = slice(contents, end + 1, contents.count);
-            }
+    filename := get_filename_from_template_name(name);
+    file_contents, file_was_read := read_entire_file(filename);
+    assert(file_was_read, "template file % (%) was not read!", name, filename);
 
-            text_after := slice(contents, 0, contents.count);
-            if text_after.count > 0 {
-                after_text: Template_Piece;
-                after_text.type = .TEXT;
-                after_text.text = copy_string(text_after);
-                array_add(*template.pieces, after_text);
-            }
-            table_add(*templates, copy_string(very_short_name), template);
+    contents_remaining := copy_string(file_contents);
+    while contents_remaining.count > 0 {
+        index_of_start_of_parse_string_including_encapsulating_notation := find_index_from_left(contents_remaining, PARSE_STRING_BEGIN);
+        if index_of_start_of_parse_string_including_encapsulating_notation < 0 then break;
+
+        part_before_parse_string_including_encapsulating_notation := slice(contents_remaining, 0, index_of_start_of_parse_string_including_encapsulating_notation);
+
+        index_of_start_of_parse_string := index_of_start_of_parse_string_including_encapsulating_notation + PARSE_STRING_BEGIN.count;
+        is_template_include := slice(contents_remaining, index_of_start_of_parse_string, INCLUDE_STRING_BEGIN.count) == INCLUDE_STRING_BEGIN;
+        if is_template_include then index_of_start_of_parse_string += INCLUDE_STRING_BEGIN.count;
+
+        index_of_end_of_parse_string_including_encapsulating_notation := find_index_from_left(contents_remaining, PARSE_STRING_END, index_of_start_of_parse_string_including_encapsulating_notation);
+        if index_of_end_of_parse_string_including_encapsulating_notation < 0 then break;
+
+        if is_template_include {
+            assert(slice(contents_remaining, index_of_end_of_parse_string_including_encapsulating_notation+PARSE_STRING_END.count, INCLUDE_STRING_END.count) == INCLUDE_STRING_END, "template include is missing second closing brace!");
+            index_of_end_of_parse_string_including_encapsulating_notation += INCLUDE_STRING_END.count;
         }
-        else print("failed to load template: %\n", info.short_name);
-    }
-    visit_files(visitor_data.template_path, true, *visitor_data, visitor, visit_files=true, visit_directories=false);
-    templates_initialized = true;
-}
 
-free_templates :: () {
-    for * templates {
-        for * it.pieces if it.type ==.TEXT then free(it.text);
-        array_free(it.pieces);
-        for * it.params free(it.data);
-        array_free(it.params);
-        free(it.body);
-        free(it_index.data);
-    }
-    table_reset(*templates);
-    deinit(*templates);
-}
+        count_of_parse_string_including_encapsulating_notation := index_of_end_of_parse_string_including_encapsulating_notation - index_of_start_of_parse_string_including_encapsulating_notation + PARSE_STRING_END.count + ifx is_template_include then INCLUDE_STRING_END.count;
 
-render :: (template_name: string, args: ..Any, loc := #caller_location) -> string #must {
-    log("%", loc);
-    using context.reqres;
-    if !templates_initialized init_templates();
-    template := table_find_pointer(*templates, template_name);
-    if !template return tprint("-- TEMPLATE NOT FOUND: % --\n", template_name);
-    if args.count > 0 && args.count != template.params.count {
-        return tprint("-- RENDER ARGUMENT ERROR: % --\n", template_name);
-    }
-    for args param_set(template.params[it_index], it);
-    builder: String_Builder;
-    for template.pieces if it.type == {
-        case .TEXT;
-            append(*builder, it.text);
-        case .PARAM;
-            param_name := template.params[it.param_id];
-            value, found := param_get(param_name);
-            if !res.rendered_toasts && param_name == "toasts" {
-                _, toast_template_exists := table_find(*templates, TOAST_TEMPLATE_NAME);
-                if toast_template_exists {
-                    res.rendered_toasts = true;
-                    value = render_each(res.toasts, #code render_it(TOAST_TEMPLATE_NAME, it));
-                    found = true;
-                }
+        index_of_end_of_parse_string := index_of_end_of_parse_string_including_encapsulating_notation - ifx is_template_include then INCLUDE_STRING_BEGIN.count;
+        count_of_parse_string := index_of_end_of_parse_string - index_of_start_of_parse_string;
+
+        to_replace := slice(contents_remaining, index_of_start_of_parse_string_including_encapsulating_notation, count_of_parse_string_including_encapsulating_notation);
+
+        to_parse := slice(contents_remaining, index_of_start_of_parse_string, count_of_parse_string);
+
+        part_after_parse_string_including_encapsulating_notation := slice(
+            contents_remaining,
+            index_of_end_of_parse_string_including_encapsulating_notation + 1,
+            contents_remaining.count - index_of_end_of_parse_string_including_encapsulating_notation - 1
+        );
+
+        if is_template_include {
+            include_filename := get_filename_from_template_name(to_parse);
+            include_contents, include_was_read := read_entire_file(include_filename);
+            assert(include_was_read, "include template file % (%) was not read!", to_parse, include_filename);
+            contents_remaining = tprint("%1 %2%3", copy_string(part_before_parse_string_including_encapsulating_notation), include_contents, copy_string(part_after_parse_string_including_encapsulating_notation));
+        }
+        else {
+            if part_before_parse_string_including_encapsulating_notation.count > 0 {
+                array_add(*new_template.pieces, .{
+                    type=.TEXT,
+                    text=copy_string(part_before_parse_string_including_encapsulating_notation)
+                });
             }
-            append(*builder, ifx found then value else ""); // blank if nonexistent might not be the Right Thing To Do, we'll see...
+            array_add(*new_template.pieces, .{
+                type=.PARAM,
+                text=copy_string(to_parse)
+            });
+            contents_remaining = copy_string(part_after_parse_string_including_encapsulating_notation);
+        }
     }
-    return builder_to_string(*builder, allocator=temp);
-}
-render_each :: (items: $T, code: Code, when_empty: string = "") -> string #expand {
-    using context.reqres;
-    if !items.count return when_empty;
-    builder: String_Builder;
-    for items #insert,scope() code;
-    return builder_to_string(*builder, allocator=temp);
+    if contents_remaining.count > 0 {
+        array_add(*new_template.pieces, .{
+            type=.TEXT,
+            text=copy_string(contents_remaining)
+        });
+    }
+    return new_template;
 
-    render_it :: (template_name: string, args: ..Any) #expand {
-        append(*`builder, render(template_name, ..args));
+    get_filename_from_template_name :: (template_name: string) -> string #expand {
+        return tprint("%1%2/%3%4", get_working_directory(), relative_template_path, template_name, extension);
     }
 }
+
+param_get :: (key: string) -> value := "", success := true {
+    value, success := table_find(*context.reqres.req.params, key);
+    if !success return success = false;
+    return value, success = value != "";
+}
+param_get_int :: (key: string) -> value := -1, success: bool=true {
+    string_value, key_success := table_find(*context.reqres.req.params, key);
+    if !key_success || string_value == "" return success = false;
+    int_value, parse_success := parse_int(*string_value);
+    if !parse_success return success = false;
+    return int_value;
+}
+param_set :: inline (key: string, value: Any)    { param_set(key, tprint("%", value)); }
+param_set :: inline (key: string, value: string) { table_set(*context.reqres.req.params, key, value); }
 
 toast :: (message: string) { array_add(*context.reqres.res.toasts, message); }
