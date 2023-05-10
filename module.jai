@@ -1,6 +1,8 @@
 #module_parameters(
     VERBOSE := false,
     HOSTNAME := "localhost",
+    STATE_TYPE := void,
+    SESSION_TYPE := void,
     MAX_NESTED_DELEGATED_TEMPLATE_DEPTH := 8,
     SESSIONS_PER_BUCKET := 1000,
     SESSION_TOKEN := "_SESSION_TOKEN",

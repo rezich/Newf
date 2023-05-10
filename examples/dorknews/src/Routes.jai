@@ -1,12 +1,20 @@
-is_logged_in     :: () -> bool { _, logged_in := session_get_int("user_id"); return logged_in; }
+is_logged_in :: () -> bool {
+    using context.reqres;
+    if !session then return false;
+    return session.user_id != 0;
+}
 
 set_routes :: () {
+
+
+before_route(() { if is_logged_in() then context.reqres.state.current_user = select_by_id(User, context.reqres.session.user_id) ? assert(false, "THIS SHOULD NEVER HAPPEN"); });
+
 
 Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #expand {
     Index :: struct {
         site_title:   string;
         page_title:   string;
-        toasts:    [] string;
+        toasts:    [] Toast;
         nav_user:     string;
         body:         string;
         current_year: int;
@@ -14,40 +22,27 @@ Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #ex
     Respond(Render("index", Index.{
         site_title="Dorknews",
         page_title=page_title,
-        toasts=context.reqres.res.toasts,
-        nav_user=param_get("nav_user"),
+        toasts=get_toasts(),
+        nav_user=ifx is_logged_in() then Render("nav_user/logged_in") else Render("nav_user/default"),
         body=body,
         current_year=to_calendar(current_time_consensus()).year
     }), status=status);
 }
 
 
-before_route(() {
-    param_set("current_year", to_calendar(current_time_consensus()).year);
-    param_set("site_title", "Dorknews");
-    /*current_user_id, logged_in := session_get_int("user_id");
-    if logged_in {
-        user := select_by_id(User, current_user_id) ? #code {
-            param_set("nav_user", Render("nav_user/default"));
-            Reroute(login_form, "Something happened—please log in again.");
-            //TODO: make sure this works
-        }; 
-        param_set("current_user_id", user.id);
-        param_set("current_user_name", user.name);
-        param_set("nav_user", render("nav_user/logged_in"));
-    }
-    else param_set("nav_user", render("nav_user/default"));*/
-    param_set("nav_user", "");
-});
 
 
-// landing page
+//== LANDING PAGE ==================================================================================
 route(.GET, "/", () {
     Respond_Index("Homepage", Render("submission/header", The_Algo()));
 }/*, cache=.{20}*/); // cache does not work yet
 
 
-// submission detail
+
+
+//== SUBMISSION ====================================================================================
+
+//---- submission detail -------------------------------------------------------
 route(.GET, "/submission/:id", () {
     id, id_valid := param_get_int("id");
     if !id_valid then Reroute(not_found);
@@ -60,17 +55,19 @@ route(.GET, "/submission/:id", () {
     );
 });
 
-/*
-// submission form
+//---- submission form ---------------------------------------------------------
 route(.GET, "/submit", new_submission_form);
 new_submission_form :: () {
     if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
-    Respond_Index("Submit story", Render("submit"));
+    Respond_Index("Submit story", Render("submit", Submission.{
+        headline=param_get("submission_headline"),
+        body=param_get("submission_body")
+    }));
 }
 
-
-// submission process
+//---- submission process ------------------------------------------------------
 route(.POST, "/submit", () {
+    if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
     new_submission: Submission;
     headline_given, body_given: bool;
 
@@ -81,12 +78,12 @@ route(.POST, "/submit", () {
     if !body_given then toast("Did not provide body.");
 
     if !headline_given || !body_given {
-        param_set("submission_headline", new_submission.headline);
-        param_set("submission_body", new_submission.body);
+        //param_set("submission_headline", new_submission.headline);
+        //param_set("submission_body", new_submission.body);
         Reroute(new_submission_form);
     }
 
-    new_submission.submitter = Get_Logged_In_User(); //TODO: replace with something not bad!!
+    new_submission.submitter = context.reqres.state.current_user;
 
     submission := insert(new_submission);
 
@@ -94,111 +91,110 @@ route(.POST, "/submit", () {
 });
 
 
-// user detail
+
+
+//== USER / AUTH ===================================================================================
+
+//---- user detail -------------------------------------------------------------
 route(.GET, "/user/:name", () {
-    name, _ := param_get("name");
+    name := param_get("name");
 
     user := select_from(User, where="name = ?", name, limit=1) ? Reroute(not_found);
-    submissions := select_from(Submission, where="submitter_id = ?", user.id);
+    user.submissions = select_from(Submission, where="submitter_id = ?", user.id);
 
-    param_set("user_name", user.name);
-    param_set("user_id", user.id);
-    param_set("user_submissions", render_each(submissions,
-        #code { render_it("submission/header", it.id, it.headline); },
-        "<i>This user has not submitted anything.</i>"
-    ));
-    param_set("user_comments", render_each(void.[], //TODO
-        #code,null, //TODO
-        "<i>This user has not written any comments.</i>"
-    ));
-
-    Respond_Index(tprint("user %", user.name), render("user"));
+    Respond_Index(tprint("user %", user.name), Render("user", user));
 });
 
-
-// login form
+//---- login form --------------------------------------------------------------
 route(.GET, "/login", login_form);
 login_form :: () {
     if is_logged_in() then Redirect("/", "You are already logged in!");
-    Respond_Index("Log in", render("login"));
+    Login_Form :: struct { login_name: string; }
+    Respond_Index("Log in", Render("login", Login_Form.{login_name=""}));
 }
 
-
-// login process
+//---- login process -----------------------------------------------------------
 route(.POST, "/login", () {
     name, name_given := param_get("name");
-    if !name_given then Reroute(login_form, "No user name provided");
+    if !name_given || name == "" then Reroute(login_form, "No user name provided.");
 
-    user := select_from(User, where="name = ?", name, limit=1) ? Reroute(login_form, "User does not exist");
+    user := select_from(User, where="name = ?", name, limit=1) ? Reroute(login_form, "User does not exist.");
 
     password, password_given := param_get("password");
     if !password_given {
-        param_set("login_name", name);
+        //param_set("login_name", name);
         Reroute(login_form, "No password provided.");
     }
 
     if md5(password) != user.password_hash {
-        param_set("login_name", name);
+        //param_set("login_name", name);
         Reroute(login_form, "Invalid password.");
     }
 
-    session_set("user_id", user.id);
+    begin_session();
+    context.reqres.session.user_id = user.id;
     Redirect("/", "Logged in successfully. 😀");
 });
 
-
-// register form
+//---- register form -----------------------------------------------------------
 route(.GET, "/register", register_form);
-register_form :: () { Respond_Index("Register account", render("register")); }
+register_form :: () {
+    Register :: struct { register_name: string; }
+    register := Register.{param_get("register_username")};
+    Respond_Index("Register account", Render("register", register));
+}
 
-
-// register process
+//---- register process --------------------------------------------------------
 route(.POST, "/register", () {
     name, name_given := param_get("name");
     if !name_given then Reroute(register_form, "No user name provided.");
 
-    user := select_from(User, where="name = ?", name, limit=1) ? Reroute(register_form, "User name is already taken.");
+    user := select_from(User, where="name = ?", name, limit=1);
+    if !is_null(user) then Reroute(register_form, "User name is already taken.");
 
     password, password_given := param_get("password");
     if !password_given {
-        param_set("register_name", name);
+        //param_set("register_name", name);
         Reroute(register_form, "No password provided.");
     }
 
     password_confirm, password_confirm_given := param_get("password_confirm");
     if !password_confirm_given {
-        param_set("register_name", name);
+        //param_set("register_name", name);
         Reroute(register_form, "No password confirmation provided.");
     }
 
     if password != password_confirm {
-        param_set("register_name", name);
+        //param_set("register_name", name);
         Reroute(register_form, "Password and password confirmation do not match.");
     }
 
     new_user := insert(User.{name=name, password_hash=md5(password)});
 
-    session_set("user_id", new_user.id);
+    begin_session();
+    context.reqres.session.user_id = new_user.id;
     Redirect("/", "Registered and logged in successfully. 😀");
 });
 
-
-// logout
+//---- logout ------------------------------------------------------------------
 route(.GET, "/logout", () {
     end_session();
     cookie_unset("saved_name");
     cookie_unset("saved_password");
     Redirect("/", "Logged out successfully.");
-});*/
-
-
-// favicon
-route(.GET, "/favicon.ico", () {
-    Respond(status=404);
 });
 
 
-// catch-all 404
+
+
+//== ETCETERA ======================================================================================
+
+//---- favicon -----------------------------------------------------------------
+route(.GET, "/favicon.ico", () {
+    Respond(status=404); //TODO
+});
+
+//---- catch-all 404 -----------------------------------------------------------
 route(.GET, "*", "*", not_found);
 not_found :: () { Respond_Index("Not found", Render("404"), status=404); }
 

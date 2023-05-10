@@ -1,5 +1,3 @@
-//------------------------------------------------------------------------------
-// Server
 BUFFER_SIZE :: 1024 * 1024 * 4;
 REQUEST_BUFFER_SIZE :: 65536;
 MAX_THREADS :: 8;
@@ -11,32 +9,21 @@ Request_Buffer :: #type [REQUEST_BUFFER_SIZE+1] u8;
 server_requested_shutdown := false;
 
 Server :: struct {
-    port: u16;
-    wsa: WSAData;
-    running: bool;
+    port:         u16;
+    wsa:          WSAData;
+    running:      bool;
     thread_group: Thread_Group;
-}
-Request_Resolution :: struct(Client_Type: Type) {
-    client: Client_Type;
-    req: Request;
-    res: Response;
-    buffer: Buffer;
-    //cache_settings: Route.Cache_Settings;
-}
-#add_context reqres: *Request_Resolution(Client);
-Client :: struct {
-    socket: Socket;
 }
 
 listen :: (
-    listen_port: u16  = 80,
+    listen_port      := 80,
     before           := #code,null,
     after            := #code,null,
     $POORLY_THREADED := false,
     caller_code      := #caller_code
 ) #expand {
     using server: Server;
-    port = listen_port;
+    port = cast(u16) listen_port;
     num_threads := 1;
     #if POORLY_THREADED {
         num_cpus := get_number_of_processors();
@@ -53,8 +40,8 @@ listen :: (
         thread_group.name = "server";
         thread_group.logging = true;
     }
-    {   // this goofy thing prevents CTRL+C from killing the server immediately, so we can
-        // clean up and stuff
+// this goofy thing prevents CTRL+C from killing the server immediately, so we can clean up & stuff
+    {
         kernel32 :: #system_library "kernel32";
         SetConsoleCtrlHandler  :: (HandlerRoutine: (fdwCtrlType: u32) -> s32, Add: s32 ) -> s32 #foreign kernel32;
         Routine :: (fdwCtrlType: u32) -> s32 #c_call {
@@ -112,7 +99,7 @@ listen :: (
             incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
             if incoming_socket != INVALID_SOCKET {
                 #insert,scope(caller_code) before;
-                using work := New(Request_Resolution(Client));
+                using work := New(Request_Resolution);
                 client.socket = incoming_socket;
                 resolve(work);
                 deinit(*req); deinit(*res);
@@ -237,8 +224,8 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
                             kv := split(it, "=");
                             if kv.count == 2 {
                                 if kv[0] == {
-                                    case SESSION_TOKEN; load_or_begin_session(kv[1]);
-                                    case UNSEEN_TOASTS_TOKEN; for split(decode_uri_component(kv[1]), UNSEEN_TOASTS_SEPARATOR) array_add(*res.toasts, it);
+                                    case SESSION_TOKEN; load_or_reset_session(kv[1]);
+                                    case UNSEEN_TOASTS_TOKEN; for split(decode_uri_component(kv[1]), UNSEEN_TOASTS_SEPARATOR) toast(it);
                                 }
                                 table_add(*req.cookies, kv[0], kv[1]);
                             }
@@ -257,6 +244,7 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
                 }
             }
         }
+        cookie_unset(UNSEEN_TOASTS_TOKEN);
 
         proc: Route.Proc;
         /*cache_filename := "";
@@ -304,7 +292,7 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
                         if !begins_with(str, stretch.text) continue;
                         str = slice(str, stretch.text.count, str.count);
                     case .PARAM;
-                        end_of_param := find_index_of_any_from_left(str, ROUTE_PATH_SEPARATORS);
+                        end_of_param := find_index_of_any_from_left(str, Route.PATH_SEPARATORS);
                         if end_of_param < 0 then end_of_param = str.count;
                         if end_of_param == 0 break;
                         table_add(*params, route.params[current_param], slice(str, 0, end_of_param));
@@ -352,25 +340,10 @@ XX,                 /* 1 */ route.last_cached,
             }
         }
 
-        // set builtin params
-        param_set("HOSTNAME", HOSTNAME);
-
         // process client
         for before_routes it();
         if proc then proc(); else log("No proc...? %\n", req.uri.path);
         for after_routes it();
-
-        // handle unseen toasts
-        if res.toasts.count > 0 && !res.rendered_toasts {
-            builder: String_Builder;
-            first := true;
-            for res.toasts {
-                append(*builder, ifx first then it else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it));
-                if first then first = false;
-            }
-            cookie_set(UNSEEN_TOASTS_TOKEN, builder_to_string(*builder));
-        }
-        else cookie_unset(UNSEEN_TOASTS_TOKEN);
 
         response_string : /*string;
         if should_read_from_cache then response_string = read_entire_file(cache_filename);

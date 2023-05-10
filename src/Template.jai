@@ -33,11 +33,12 @@ Render :: (
 }
 #expand {
     sb: String_Builder;
-    if (cast(*Type_Info) T).type != .VOID then #insert -> string {
+    
+    /*if (cast(*Type_Info) T).type != .VOID then */#insert -> string {
 
         template := get_or_load_template(template_name);
         assert(!!template, "TEMPLATE NOT FOUND: [%]", template_name);
-        
+
         sb: String_Builder;
         print_to_builder(*sb, #string XX
 %1 {
@@ -58,8 +59,10 @@ XX_OUTER_XX;
             case .PARAM;
                 if (cast(*Type_Info) T).type == .VOID then continue;
                 print_to_builder(*sb, #string XX
-    print_to_builder(*sb, "%%", __data.%1);
-XX,             /* 1 */ it.text);
+    print_to_builder(*sb, "%%", %1%2);
+XX,             /* 1 */ ifx !begins_with(it.text, "state.") then "__data." else "context.reqres.",
+                /* 2 */ it.text
+                );
             case .DELEGATED;
                 info := cast(*Type_Info) T;
                 assert(info.type != .VOID);
@@ -82,7 +85,7 @@ XX;
 XX);
         return builder_to_string(*sb);
     }
-    return builder_to_string(*sb);
+    return builder_to_string(*sb, allocator=temp);
 }
 
 Render :: (
@@ -170,18 +173,6 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
             contents_remaining = tprint("%1 %2%3", copy_string(part_before_parse_string_including_encapsulating_notation), include_contents, copy_string(part_after_parse_string_including_encapsulating_notation));
             continue;
         }
-        else if is_delegated_include {
-            _, text, delegate := split_from_left(to_parse, INCLUDE_DELEGATOR);
-            text = trim(text);
-            delegate = trim(delegate);
-            delegate.data += INCLUDE_STRING_BEGIN.count;
-            delegate.count -= INCLUDE_STRING_BEGIN.count + INCLUDE_STRING_END.count;
-            array_add(*new_template.pieces, .{
-                type=.DELEGATED,
-                text=text,
-                delegate=delegate
-            });
-        }
         else {
             if part_before_parse_string_including_encapsulating_notation.count > 0 {
                 array_add(*new_template.pieces, .{
@@ -189,12 +180,26 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
                     text=copy_string(part_before_parse_string_including_encapsulating_notation)
                 });
             }
-            array_add(*new_template.pieces, .{
-                type=.PARAM,
-                text=copy_string(to_parse)
-            });
+            if is_delegated_include {
+                _, text, delegate := split_from_left(to_parse, INCLUDE_DELEGATOR);
+                text = trim(text);
+                delegate = trim(delegate);
+                delegate.data += INCLUDE_STRING_BEGIN.count;
+                delegate.count -= INCLUDE_STRING_BEGIN.count + INCLUDE_STRING_END.count;
+                array_add(*new_template.pieces, .{
+                    type=.DELEGATED,
+                    text=text,
+                    delegate=delegate
+                });
+            }
+            else {
+                array_add(*new_template.pieces, .{
+                    type=.PARAM,
+                    text=copy_string(to_parse)
+                });
+            }
+            contents_remaining = copy_string(part_after_parse_string_including_encapsulating_notation);
         }
-        contents_remaining = copy_string(part_after_parse_string_including_encapsulating_notation);
     }
     if contents_remaining.count > 0 {
         array_add(*new_template.pieces, .{
@@ -208,20 +213,3 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
         return tprint("%1%2/%3%4", get_working_directory(), relative_template_path, template_name, extension);
     }
 }
-
-param_get :: (key: string) -> value := "", success := true {
-    value, success := table_find(*context.reqres.req.params, key);
-    if !success return success = false;
-    return value, success = value != "";
-}
-param_get_int :: (key: string) -> value := -1, success: bool=true {
-    string_value, key_success := table_find(*context.reqres.req.params, key);
-    if !key_success || string_value == "" return success = false;
-    int_value, parse_success := parse_int(*string_value);
-    if !parse_success return success = false;
-    return int_value;
-}
-param_set :: inline (key: string, value: Any)    { param_set(key, tprint("%", value)); }
-param_set :: inline (key: string, value: string) { table_set(*context.reqres.req.params, key, value); }
-
-toast :: (message: string) { array_add(*context.reqres.res.toasts, message); }

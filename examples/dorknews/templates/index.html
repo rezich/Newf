@@ -10,7 +10,7 @@ h1, h2 {
     margin: 0.5em 0;
 }
 hr {
-    margin: 0 1ch;
+    margin: 0.5em 1ch;
 }
 .main {
     max-width: 800px;
@@ -89,7 +89,7 @@ form > div {
             </ul>
         </div>
         <div class="header_center toasts">
-%{toasts}
+%{toasts -> {toast}}
         </div>
         <ul class="header_right nav_user">
 %{nav_user}

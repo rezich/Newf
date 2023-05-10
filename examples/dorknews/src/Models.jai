@@ -1,4 +1,3 @@
-//---- Comment -------------------------------------------------------------------------------------
 Comment :: struct { using #as model: Model;
     submission:    Cached(Submission);
     parent:        Cached(Comment);
@@ -12,10 +11,8 @@ Comment_With_Threaded_Comments :: struct {
     threaded_comments: [..] Comment_With_Threaded_Comments;
 }
 
+//==================================================================================================
 
-
-
-//---- Submission ----------------------------------------------------------------------------------
 Submission :: struct { using #as model: Model;
     submitter: Cached(User); @autofetch
     headline:  string;
@@ -36,7 +33,6 @@ Render_With_Threaded_Comments :: (submission: Cached(Submission)) -> string {
     // this is probably not the best way to do this
     Get_Threaded_Comments_For :: (submission: Cached(Submission)) -> [..] Comment_With_Threaded_Comments {
         all_comments_for_submission := select_from(Comment, where="submission_id = ?", submission.id);
-        for all_comments_for_submission log("%", it);
         unthreaded_comments: [..] Cached(Comment);
         unthreaded_comments.allocator = temp; // bleh
           threaded_comments: [..] Comment_With_Threaded_Comments;
@@ -67,19 +63,18 @@ Render_With_Threaded_Comments :: (submission: Cached(Submission)) -> string {
     }
 }
 
+//==================================================================================================
 
-
-
-//---- User ----------------------------------------------------------------------------------------
 User :: struct { using #as model: Model;
-    name:          string;
-    password_hash: string;
+    name:             string;
+    password_hash:    string;
+    karma:            int;                @do_not_serialize
+    submissions:   [] Cached(Submission); @do_not_serialize
+    comments:      [] Cached(Comment);    @do_not_serialize
 }
 
+//==================================================================================================
 
-
-
-//---- Vote ----------------------------------------------------------------------------------------
 Vote :: struct { using #as model: Model;
     user:      Cached(User);
     sumission: Cached(Submission);

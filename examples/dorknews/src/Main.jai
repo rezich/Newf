@@ -2,7 +2,8 @@ BUILD : enum { DEVELOPING; DEPLOYING; } : .DEVELOPING;
 
 
 #load "Models.jai";
-#load "State.jai";
+#load "Routes.jai";
+#load "Session_and_State.jai";
 
 
 The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
@@ -10,32 +11,18 @@ The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
 }
 
 
-//TODO: get rid of this!
-Get_Logged_In_User :: () -> Cached(User) {
-    id := session_get_int("user_id");
-    if id == -1 then return .{};
-    return select_by_id(User, id);
-}
-
-
 main :: () {
-    DATABASE_FILENAME :: "database.db";
-    context.sqlite.filename = DATABASE_FILENAME;
+    context.sqlite.filename = "database.db";
 
     set_working_directory((#import "String").path_strip_filename((#import "System").get_path_of_running_executable()));
-    #if BUILD == .DEVELOPING then (#import "File").file_delete(DATABASE_FILENAME); // delete the databse every run for now
+    #if BUILD == .DEVELOPING then (#import "File").file_delete(context.sqlite.filename); // delete the databse every run for now
 
     init_model_cache();
-    #if BUILD == .DEVELOPING {
-        #load "Mock_Database.jai";
-        mock_database();
-    }
+    #if BUILD == .DEVELOPING { #load "Mock_Database.jai"; mock_database(); }
 
-    #load "Routes.jai";
     set_routes();
 
-    open_for(listen(8000, after=#code { reset_model_cache(); }), "main");
-
+    open_for(listen(ifx BUILD == .DEPLOYING then 80 else 8000, after=#code { reset_model_cache(); }), "main");
 
     #if BUILD == .DEVELOPING {
         SQLite.optional_cleanup();
@@ -50,10 +37,8 @@ DEBUG_MEMORY, VERBOSE :: BUILD == .DEVELOPING;
 
 
 #import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
-#import "md5";
 
-
-using Newf   :: #import,dir "../../../../Newf"  (VERBOSE=VERBOSE);
+using Newf   :: #import,dir "../../../../Newf"  (VERBOSE=VERBOSE, STATE_TYPE=State, SESSION_TYPE=Session);
 using SQLite :: #import,dir "../../../../SQLite"(VERBOSE=VERBOSE, USE_MODEL_CACHE=true);
 
 
