@@ -10,27 +10,9 @@ Template :: struct {
 
 Render :: (
    $template_name: string,
-              loc:=#caller_location,
-      caller_code:=#caller_code
-) -> string {
-    return Render(template_name, void);
-}
-
-Render :: (
            __data: $T,
-   $template_name: string,
-              loc:=#caller_location,
-      caller_code:=#caller_code
-) -> string
-#modify { return (cast(*Type_Info) T).type != .STRING; } #expand {
-    return Render(template_name, __data, loc, caller_code);
-}
-
-Render :: (
-   $template_name: string,
-           __data: $T,
-              loc:=#caller_location,
-      caller_code:=#caller_code
+              loc:=#caller_location, // unused, for now
+      caller_code:=#caller_code      // unused, for now
 ) -> string #expand {
     sb: String_Builder;
     if (cast(*Type_Info) T).type != .VOID then #insert -> string {
@@ -69,6 +51,24 @@ XX);
         return builder_to_string(*sb);
     }
     return builder_to_string(*sb);
+}
+
+Render :: (
+           __data: $T,
+   $template_name: string,
+              loc:=#caller_location,
+      caller_code:=#caller_code
+) -> string
+#modify { return (cast(*Type_Info) T).type != .STRING; } #expand {
+    return Render(template_name, __data, loc, caller_code);
+}
+
+Render :: (
+   $template_name: string,
+              loc:=#caller_location,
+      caller_code:=#caller_code
+) -> string {
+    return Render(template_name, void);
 }
 
 templates: Table(string, Template);
