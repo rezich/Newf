@@ -3,17 +3,35 @@ Template :: struct {
     filename:    string;
     body:        string;
     pieces: [..] struct {
-        type:     enum { TEXT; PARAM; }
+        type:     enum { TEXT; PARAM; DELEGATED; }
         text:     string;
+        delegate: string;
     };
 }
 
 Render :: (
-   $template_name: string,
-           __data: $T,
-              loc:=#caller_location, // unused, for now
-      caller_code:=#caller_code      // unused, for now
-) -> string #expand {
+    $template_name: string,
+            __data: $T,
+      nested_depth:=0,
+               loc:=#caller_location, // unused, for now
+       caller_code:=#caller_code      // unused, for now
+) -> string
+#modify {
+        info := cast(*Type_Info) T;
+        if (info).type == {
+            case .STRUCT; return true;
+            case .TYPE; return true;
+            case .ARRAY;
+                array_info := cast(*Type_Info_Array) info;
+                if array_info.element_type.type == {
+                    case .STRUCT; return true;
+                    case .POINTER; return (cast(*Type_Info_Pointer) array_info).pointer_to.type == .STRUCT;
+                }
+            case .POINTER; return (cast(*Type_Info_Pointer) info).pointer_to.type == .STRUCT;
+        }
+        return false;
+}
+#expand {
     sb: String_Builder;
     if (cast(*Type_Info) T).type != .VOID then #insert -> string {
 
@@ -38,12 +56,26 @@ XX_OUTER_XX;
                 str.count -= 1;
                 print_to_builder(*sb, str, it.text);
             case .PARAM;
-                if (cast(*Type_Info) T).type != .VOID {
-                param_name := it.text;
+                if (cast(*Type_Info) T).type == .VOID then continue;
                 print_to_builder(*sb, #string XX
     print_to_builder(*sb, "%%", __data.%1);
-XX,            /* 1 */ param_name);
-                }
+XX,             /* 1 */ it.text);
+            case .DELEGATED;
+                info := cast(*Type_Info) T;
+                assert(info.type != .VOID);
+                if nested_depth >= MAX_NESTED_DELEGATED_TEMPLATE_DEPTH then continue;
+                str := #string XX
+    %1append(*sb, Render("%2", __data.%3, nested_depth=%4));
+XX;
+                str.count -= 1;
+                print_to_builder(*sb, str,
+                /* 1 */ ifx info.type == .ARRAY   then tprint("if __data.%1.count > 0 then ", it.text) else
+                        ifx info.type == .POINTER then tprint("if !!__data.%1 then ", it.text),
+                /* 2 */ it.delegate,
+                /* 3 */ it.text,
+                /* 4 */ nested_depth+1
+                );
+
         }
         append(*sb, #string XX
 }
@@ -60,7 +92,7 @@ Render :: (
       caller_code:=#caller_code
 ) -> string
 #modify { return (cast(*Type_Info) T).type != .STRING; } #expand {
-    return Render(template_name, __data, loc, caller_code);
+    return Render(template_name, __data, loc=loc, caller_code=caller_code);
 }
 
 Render :: (
@@ -68,18 +100,17 @@ Render :: (
               loc:=#caller_location,
       caller_code:=#caller_code
 ) -> string {
-    return Render(template_name, void);
+    return Render(template_name, void, loc=loc, caller_code=caller_code);
 }
 
 templates: Table(string, Template);
-
-//TODO: make %{threaded_comments -> {comment}} (pass the struct member threaded_comments to the template called comment) work!
 
 get_or_load_template :: (name: string, relative_template_path: string = "/templates", extension: string = ".html") -> *Template {
     PARSE_STRING_BEGIN   :: "%{";
     PARSE_STRING_END     :: "}";
     INCLUDE_STRING_BEGIN :: "{";
     INCLUDE_STRING_END   :: "}";
+    INCLUDE_DELEGATOR    :: "->";
 
     existing_template := table_find_pointer(*templates, name);
     if !!existing_template then return existing_template;
@@ -99,12 +130,20 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
 
         index_of_start_of_parse_string := index_of_start_of_parse_string_including_encapsulating_notation + PARSE_STRING_BEGIN.count;
         is_template_include := slice(contents_remaining, index_of_start_of_parse_string, INCLUDE_STRING_BEGIN.count) == INCLUDE_STRING_BEGIN;
+        is_delegated_include := false;
+        if !is_template_include {
+            next_include_delegator := find_index_from_left(contents_remaining, INCLUDE_DELEGATOR, index_of_start_of_parse_string_including_encapsulating_notation);
+            if next_include_delegator > 0 {
+                next_parse_string_end := find_index_from_left(contents_remaining, PARSE_STRING_END, index_of_start_of_parse_string_including_encapsulating_notation);
+                is_delegated_include = next_include_delegator < next_parse_string_end;
+            }
+        }
         if is_template_include then index_of_start_of_parse_string += INCLUDE_STRING_BEGIN.count;
 
         index_of_end_of_parse_string_including_encapsulating_notation := find_index_from_left(contents_remaining, PARSE_STRING_END, index_of_start_of_parse_string_including_encapsulating_notation);
         if index_of_end_of_parse_string_including_encapsulating_notation < 0 then break;
 
-        if is_template_include {
+        if is_template_include || is_delegated_include {
             assert(slice(contents_remaining, index_of_end_of_parse_string_including_encapsulating_notation+PARSE_STRING_END.count, INCLUDE_STRING_END.count) == INCLUDE_STRING_END, "template include is missing second closing brace!");
             index_of_end_of_parse_string_including_encapsulating_notation += INCLUDE_STRING_END.count;
         }
@@ -129,6 +168,19 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
             include_contents, include_was_read := read_entire_file(include_filename);
             assert(include_was_read, "include template file % (%) was not read!", to_parse, include_filename);
             contents_remaining = tprint("%1 %2%3", copy_string(part_before_parse_string_including_encapsulating_notation), include_contents, copy_string(part_after_parse_string_including_encapsulating_notation));
+            continue;
+        }
+        else if is_delegated_include {
+            _, text, delegate := split_from_left(to_parse, INCLUDE_DELEGATOR);
+            text = trim(text);
+            delegate = trim(delegate);
+            delegate.data += INCLUDE_STRING_BEGIN.count;
+            delegate.count -= INCLUDE_STRING_BEGIN.count + INCLUDE_STRING_END.count;
+            array_add(*new_template.pieces, .{
+                type=.DELEGATED,
+                text=text,
+                delegate=delegate
+            });
         }
         else {
             if part_before_parse_string_including_encapsulating_notation.count > 0 {
@@ -141,8 +193,8 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
                 type=.PARAM,
                 text=copy_string(to_parse)
             });
-            contents_remaining = copy_string(part_after_parse_string_including_encapsulating_notation);
         }
+        contents_remaining = copy_string(part_after_parse_string_including_encapsulating_notation);
     }
     if contents_remaining.count > 0 {
         array_add(*new_template.pieces, .{

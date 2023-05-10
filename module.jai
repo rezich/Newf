@@ -1,6 +1,7 @@
 #module_parameters(
     VERBOSE := false,
     HOSTNAME := "localhost",
+    MAX_NESTED_DELEGATED_TEMPLATE_DEPTH := 8,
     SESSIONS_PER_BUCKET := 1000,
     SESSION_TOKEN := "_SESSION_TOKEN",
     UNSEEN_TOASTS_TOKEN := "_UNSEEN_TOASTS",
