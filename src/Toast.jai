@@ -7,7 +7,6 @@ toast :: (message: string) {
 
 get_toasts :: () -> [..] Toast {
     toasts: [..] Toast;
-    toasts.allocator = temp;
     if !context.reqres.session_container {
         array_copy(*toasts, context.reqres.res.toasts);
         return toasts;

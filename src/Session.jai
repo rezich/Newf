@@ -10,15 +10,19 @@ sessions: Table(Session_Container.Token, Session_Container);
 
 begin_session :: () {
     using context.reqres;
-    if !session {
-        new_session_container: Session_Container;
-        token := md5(tprint("%", get_time())); //TODO: lol
-        added := table_add(*sessions, new_session_container.token, new_session_container);
-        added.token = copy_string(token);
-        session = *added.session;
-        session_container = added;
-        cookie_set(SESSION_TOKEN, new_session_container.token);
-        move_toasts_from_res_to_session();
+    new_context := context;
+    new_context.allocator = context.default_allocator;
+    push_context new_context {
+        if !session {
+            new_session_container: Session_Container;
+            token := md5(tprint("%", get_time())); //TODO: lol
+            added := table_add(*sessions, new_session_container.token, new_session_container);
+            added.token = copy_string(token);
+            session = *added.session;
+            session_container = added;
+            cookie_set(SESSION_TOKEN, new_session_container.token);
+            move_toasts_from_res_to_session();
+        }
     }
 }
 

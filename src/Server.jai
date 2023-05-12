@@ -1,3 +1,6 @@
+// This is the least-interesting *and* least-maintained part of this project at the moment.
+// It works, but it's not great, and could be vastly improved.
+
 BUFFER_SIZE :: 1024 * 1024 * 4;
 REQUEST_BUFFER_SIZE :: 65536;
 MAX_THREADS :: 8;
@@ -81,8 +84,8 @@ listen :: (
         #if POORLY_THREADED {
             results := get_completed_work(*thread_group);
             for results {
-                using r := cast(*Request_Resolution(Client)) it;
-                deinit(*req); deinit(*res);
+                using r := cast(*Request_Resolution) it;
+                deinit(*req);
                 free(r);
                 #insert,scope(caller_code) after;
             }
@@ -90,7 +93,8 @@ listen :: (
             incoming_socket = accept(listen_socket, cast(*sockaddr) *client_address, *length);
             if incoming_socket != INVALID_SOCKET {
                 #insert,scope(caller_code) before;
-                work := New(Request_Resolution(Client));
+                work := New(Request_Resolution);
+                init(*work.res);
                 work.client.socket = incoming_socket;
                 add_work(*thread_group, work, tprint("%", incoming_socket));
             }
@@ -100,9 +104,10 @@ listen :: (
             if incoming_socket != INVALID_SOCKET {
                 #insert,scope(caller_code) before;
                 using work := New(Request_Resolution);
+                init(*res);
                 client.socket = incoming_socket;
                 resolve(work);
-                deinit(*req); deinit(*res);
+                deinit(*req);
                 free(work);
                 #insert,scope(caller_code) after;
             }
@@ -340,10 +345,14 @@ XX,                 /* 1 */ route.last_cached,
             }
         }
 
-        // process client
-        for before_routes it();
-        if proc then proc(); else log("No proc...? %\n", req.uri.path);
-        for after_routes it();
+        new_context := context;
+        new_context.allocator = temp;
+        push_context new_context {
+            // process client
+            for before_routes it();
+            if proc then proc(); else log("No proc...? %\n", req.uri.path);
+            for after_routes it();
+        }
 
         response_string : /*string;
         if should_read_from_cache then response_string = read_entire_file(cache_filename);

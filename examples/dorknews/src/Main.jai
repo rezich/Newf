@@ -10,6 +10,12 @@ The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
     return select_from(Submission, order_by=.{"created", .DESC});
 }
 
+is_logged_in :: () -> bool {
+    using context.reqres;
+    if !session then return false;
+    return session.user_id != 0;
+}
+
 
 main :: () {
     context.sqlite.filename = "database.db";
@@ -37,6 +43,7 @@ DEBUG_MEMORY, VERBOSE :: BUILD == .DEVELOPING;
 
 
 #import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
+#import "md5";
 
 using Newf   :: #import,dir "../../../../Newf"  (VERBOSE=VERBOSE, STATE_TYPE=State, SESSION_TYPE=Session);
 using SQLite :: #import,dir "../../../../SQLite"(VERBOSE=VERBOSE, USE_MODEL_CACHE=true);

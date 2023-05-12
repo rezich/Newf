@@ -10,8 +10,8 @@ Response :: struct {
     toasts: [..] Toast;
 }
 
-deinit :: (using res: *Response) {
-    deinit(*headers);
-    deinit(*cookies);
-    array_free(toasts);
+init :: (using res: *Response) {
+    headers.allocator = temp;
+    cookies.allocator = temp;
+    toasts.allocator = temp;
 }

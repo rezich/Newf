@@ -22,7 +22,10 @@ optional_cleanup :: () {
 #import "String";
 #import "File";
 #import "File_Utilities";
+#import "md5";
 
+// this wouldn't be necessary if md5 allowed you to provide an allocator...
+#scope_module
 _md5 :: #import "md5";
 md5 :: (input: string) -> string #must {
     new_context := context;

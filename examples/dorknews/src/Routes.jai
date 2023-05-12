@@ -1,13 +1,10 @@
-is_logged_in :: () -> bool {
-    using context.reqres;
-    if !session then return false;
-    return session.user_id != 0;
-}
-
 set_routes :: () {
 
 
-before_route(() { if is_logged_in() then context.reqres.state.current_user = select_by_id(User, context.reqres.session.user_id) ? assert(false, "THIS SHOULD NEVER HAPPEN"); });
+before_route(() {
+    using context.reqres;
+    if is_logged_in() then state.current_user = select_by_id(User, session.user_id) ? end_session();
+});
 
 
 Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #expand {
