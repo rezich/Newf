@@ -48,10 +48,11 @@ route(.GET, "/submission/:id", () {
     if !id_valid then Reroute(not_found);
 
     submission := select_by_id(Submission, id) ? Reroute(not_found);
+    fetch_comments(*submission);
 
     Respond_Index(
         submission.headline,
-        Render_With_Threaded_Comments(submission)
+        Render("submission", submission)
     );
 });
 
