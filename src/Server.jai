@@ -19,14 +19,14 @@ Server :: struct {
 }
 
 listen :: (
-    listen_port      := 80,
+    port             := 80,
     before           := #code,null,
     after            := #code,null,
     $POORLY_THREADED := false,
     caller_code      := #caller_code
 ) #expand {
-    using server: Server;
-    port = cast(u16) listen_port;
+    using,except(port) server: Server;
+    port16 := cast(u16) port;
     num_threads := 1;
     #if POORLY_THREADED {
         num_cpus := get_number_of_processors();
@@ -36,7 +36,7 @@ listen :: (
     print("Starting HTTP server with %1 thread%2 on port %3.\n",
     /* 1 */ num_threads,
     /* 2 */ ifx num_threads != 1 then "s",
-    /* 3 */ port
+    /* 3 */ port16
     );
     #if POORLY_THREADED {
         init(*thread_group, num_threads, resolve_in_thread, enable_work_stealing=true);
@@ -71,7 +71,7 @@ listen :: (
     if listen_socket < 0 { log("failed to init socket!"); return; }
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_address.sin_port = htons(port);
+    server_address.sin_port = htons(port16);
     {
         socket_mode: u32 = 1;
         if ioctlsocket(listen_socket, FIONBIO, *socket_mode) < 0 log("Failed to set socket mode!");

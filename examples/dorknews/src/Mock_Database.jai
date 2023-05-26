@@ -8,13 +8,13 @@ mock_database :: () { open_for(#code {
 
     for string.[
         "Ask DN: How do you hate on pointless iPhone apps?",
-        "Review my startup: www.copymoldyfridgeleftovers.org",
+        "Running Tails on a Raspberry Pi Maximum",
         "Introducing MetalBloat: a WebGL library add-on",
         "A fully functional POSIX-compliant 64-bit multitasking operating system in 14 lines of Ruby",
-        "How I turned coding Vanilla Ice Tour '91 merchandise into a $14 million a year business",
-        "Ask DN: Am I crazy to try to market panda breeding technology?",
+        "Ask DN: Has anyone else lost their laptop in the house?",
+        "Show DN: I made a new stand-alone SaaS, or two, blockchain backed open-source platform",
         "Introducing BushMagic: a Haskell library optimizer",
-        "How I turned hating on Megan Fox pictures into a $10 million a year business",
+        "An ex-Microsoft engineer has built the world's smallest USB hub",
         "An Ebay clone in 10 lines of Python"
     ] insert(Submission.{
         submitter=admin,

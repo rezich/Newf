@@ -34,7 +34,7 @@ Render :: (
 #expand {
     sb: String_Builder;
     
-    /*if (cast(*Type_Info) T).type != .VOID then */#insert -> string {
+    #insert -> string {
 
         template := get_or_load_template(template_name);
         assert(!!template, "TEMPLATE NOT FOUND: [%]", template_name);

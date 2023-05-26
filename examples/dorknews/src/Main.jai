@@ -1,4 +1,5 @@
-BUILD : enum { DEVELOPING; DEPLOYING; } : .DEVELOPING;
+BUILD : enum { DEVELOPING; DEPLOYING; } : .DEPLOYING;
+OVERRIDE_DEPLOYING_PORT :: false;
 
 
 #load "Models.jai";
@@ -28,7 +29,11 @@ main :: () {
 
     set_routes();
 
-    open_for(listen(ifx BUILD == .DEPLOYING then 80 else 8000, after=#code { reset_model_cache(); }), "main");
+    PORT :: #ifx BUILD == .DEPLOYING && !OVERRIDE_DEPLOYING_PORT then 80; else 8000;
+    open_for(listen(
+        port=PORT,
+        after=#code { reset_model_cache(); }),
+    "main");
 
     #if BUILD == .DEVELOPING {
         SQLite.optional_cleanup();
