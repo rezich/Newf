@@ -29,7 +29,7 @@ begin_session :: () {
 load_or_reset_session :: (token: Session_Container.Token) {
     using context.reqres;
     found_session := table_find_pointer(*sessions, token);
-    if !!found_session {
+    if found_session {
         session = *found_session.session;
         session_container = found_session;
         cookie_set(SESSION_TOKEN, token);

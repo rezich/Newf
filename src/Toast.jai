@@ -1,7 +1,7 @@
 Toast :: struct { message: string; }
 
 toast :: (message: string) {
-    if !!context.reqres.session_container then array_add(*context.reqres.session_container.toasts, .{message});
+    if context.reqres.session_container then array_add(*context.reqres.session_container.toasts, .{message});
     else array_add(*context.reqres.res.toasts, .{message});
 }
 

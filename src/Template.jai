@@ -73,7 +73,7 @@ XX;
                 str.count -= 1;
                 print_to_builder(*sb, str,
                 /* 1 */ ifx info.type == .ARRAY   then tprint("if __data.%1.count > 0 then ", it.text) else
-                        ifx info.type == .POINTER then tprint("if !!__data.%1 then ", it.text),
+                        ifx info.type == .POINTER then tprint("if __data.%1 then ", it.text),
                 /* 2 */ it.delegate,
                 /* 3 */ it.text,
                 /* 4 */ nested_depth+1
@@ -116,7 +116,7 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
     INCLUDE_DELEGATOR    :: "->";
 
     existing_template := table_find_pointer(*templates, name);
-    if !!existing_template then return existing_template;
+    if existing_template then return existing_template;
 
     new_template := table_add(*templates, name, .{});
 

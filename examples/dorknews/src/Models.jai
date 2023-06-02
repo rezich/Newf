@@ -28,9 +28,7 @@ Submission :: struct { using #as model: Model;
 // this is NOT autofetched, because we don't always want to fetch all comments (and do the work of
 // threading them) every time we retrieve a Submission (i.e. on the landing page)!
 fetch_comments :: (submission: *Cached(Submission)) {
-    all_comments_for_submission := select_from(Comment, where="submission_id = ?", submission.id);
-    unthreaded_comments: [..] Cached(Comment);
-    array_copy(*unthreaded_comments, all_comments_for_submission);
+    unthreaded_comments := select_from(Comment, where="submission_id = ?", submission.id);
     for unthreaded_comments if is_null(it.parent) {
         array_add(*submission.comments, it);
         remove it;
