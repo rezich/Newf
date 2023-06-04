@@ -108,12 +108,17 @@ Render :: (
 
 templates: Table(string, Template);
 
+// this could almost certainly be massively improved
 get_or_load_template :: (name: string, relative_template_path: string = "/templates", extension: string = ".html") -> *Template {
     PARSE_STRING_BEGIN   :: "%{";
     PARSE_STRING_END     :: "}";
     INCLUDE_STRING_BEGIN :: "{";
     INCLUDE_STRING_END   :: "}";
     INCLUDE_DELEGATOR    :: "->";
+
+    get_filename_from_template_name :: (template_name: string) -> string #expand {
+        return tprint("%1%2/%3%4", get_working_directory(), relative_template_path, template_name, extension);
+    }
 
     existing_template := table_find_pointer(*templates, name);
     if existing_template then return existing_template;
@@ -208,8 +213,4 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
         });
     }
     return new_template;
-
-    get_filename_from_template_name :: (template_name: string) -> string #expand {
-        return tprint("%1%2/%3%4", get_working_directory(), relative_template_path, template_name, extension);
-    }
 }

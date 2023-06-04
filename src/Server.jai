@@ -272,8 +272,8 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
                     case 1; second = *kv[0];
                     case 2; second = *kv[1];
                 }
-                table_set(*req.uri.query_params, kv[0], <<second);
-                param_set(kv[0], <<second);
+                table_set(*req.uri.query_params, kv[0], second.*);
+                param_set(kv[0], second.*);
             }
         }
         else path_without_query_string = req.uri.path;

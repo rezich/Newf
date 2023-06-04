@@ -8,16 +8,6 @@ bucket_array_find_pointer :: (using array: *Bucket_Array, locator: Bucket_Locato
 encode_uri_component :: (text: string) -> string {
     new_context := context;
     push_context new_context {
-        builder: String_Builder;
-        format_int := *context.print_style.default_format_int;
-        format_int.base = 16;
-        format_int.minimum_digits = 2;
-        for 0..text.count-1 {
-            if should_encode(text[it]) then print_to_builder(*builder, "%%%1", text[it]);
-            else append(*builder, text[it]);
-        }
-        return builder_to_string(*builder, allocator=temp);
-        
         should_encode :: (char: u8) -> bool {
             if  (char >= #char "A" && char <= #char "Z") ||
                 (char >= #char "a" && char <= #char "z") ||
@@ -28,6 +18,15 @@ encode_uri_component :: (text: string) -> string {
             then return false;
             return true;
         }
+        builder: String_Builder;
+        format_int := *context.print_style.default_format_int;
+        format_int.base = 16;
+        format_int.minimum_digits = 2;
+        for 0..text.count-1 {
+            if should_encode(text[it]) then print_to_builder(*builder, "%%%1", text[it]);
+            else append(*builder, text[it]);
+        }
+        return builder_to_string(*builder, allocator=temp);
     }
 }
 
@@ -64,4 +63,4 @@ decode_form :: (text: string) -> string {
     return decode_uri_component(str);
 }
 
-is_hex_number :: inline (c: u32) -> bool { return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_digit(c); }
+is_hex_number :: inline (c: u32) -> bool { return (c >= #char "a" && c <= #char "f") || (c >= #char "A" && c <= #char "F") || is_digit(xx c); }

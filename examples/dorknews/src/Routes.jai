@@ -29,6 +29,12 @@ Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #ex
 
 
 
+//== 404 ===========================================================================================
+not_found :: () { Respond_Index("Not found", Render("404"), status=404); }
+
+
+
+
 //== LANDING PAGE ==================================================================================
 route(.GET, "/", () {
     Respond_Index("Homepage", Render("submission/header", The_Algo()));
@@ -54,7 +60,6 @@ route(.GET, "/submission/:id", () {
 });
 
 //---- submission form ---------------------------------------------------------
-route(.GET, "/submit", new_submission_form);
 new_submission_form :: () {
     if !is_logged_in() then Redirect("/login", "You must be logged in to submit a story.");
     Respond_Index("Submit story", Render("submit", Submission.{
@@ -62,6 +67,7 @@ new_submission_form :: () {
         body=param_get("submission_body")
     }));
 }
+route(.GET, "/submit", new_submission_form);
 
 //---- submission process ------------------------------------------------------
 route(.POST, "/submit", () {
@@ -104,12 +110,13 @@ route(.GET, "/user/:name", () {
 });
 
 //---- login form --------------------------------------------------------------
-route(.GET, "/login", login_form);
 login_form :: () {
     if is_logged_in() then Redirect("/", "You are already logged in!");
     Login_Form :: struct { login_name: string; }
     Respond_Index("Log in", Render("login", Login_Form.{login_name=""}));
 }
+route(.GET, "/login", login_form);
+
 
 //---- login process -----------------------------------------------------------
 route(.POST, "/login", () {
@@ -135,12 +142,12 @@ route(.POST, "/login", () {
 });
 
 //---- register form -----------------------------------------------------------
-route(.GET, "/register", register_form);
 register_form :: () {
     Register :: struct { register_name: string; }
     register := Register.{param_get("register_username")};
     Respond_Index("Register account", Render("register", register));
 }
+route(.GET, "/register", register_form);
 
 //---- register process --------------------------------------------------------
 route(.POST, "/register", () {
@@ -194,6 +201,6 @@ route(.GET, "/favicon.ico", () {
 
 //---- catch-all 404 -----------------------------------------------------------
 route(.GET, "*", "*", not_found);
-not_found :: () { Respond_Index("Not found", Render("404"), status=404); }
+
 
 }

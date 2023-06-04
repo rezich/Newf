@@ -36,7 +36,7 @@ fetch_comments :: (submission: *Cached(Submission)) {
     unthreaded_comments_count_last_time := unthreaded_comments.count;
     while the_loop := unthreaded_comments.count > 0 {
         defer unthreaded_comments_count_last_time = unthreaded_comments.count;
-        defer assert(
+        #if BUILD == .DEVELOPING then defer assert(
             unthreaded_comments.count != unthreaded_comments_count_last_time,
             "infinite loop encountered while threading comments; could not thread % comments",
             unthreaded_comments.count

@@ -69,9 +69,6 @@ route :: (
     r.path = path;
     r.proc = proc;
     //r.cache_settings = cache;
-    parse_route_path(*r, path);
-
-    array_add(*routes, r);
 
     parse_route_path :: (r: *Route, path: string) {
         if path == "*" {
@@ -119,6 +116,10 @@ route :: (
             }
         }
     }
+    
+    parse_route_path(*r, path);
+
+    array_add(*routes, r);
 }
 
 before_routes: [..] Route.Proc;
