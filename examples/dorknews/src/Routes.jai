@@ -3,7 +3,7 @@ set_routes :: () {
 
 before_route(() {
     using context.reqres;
-    if is_logged_in() then state.current_user = select_by_id(User, session.user_id) ? end_session();
+    if is_logged_in() then state.current_user = select_by_id(User, session.user_id) || end_session();
 });
 
 
@@ -27,9 +27,6 @@ Respond_Index :: (page_title: string, body: string, status: HTTP_Status=200) #ex
 }
 
 
-
-
-//== 404 ===========================================================================================
 not_found :: () { Respond_Index("Not found", Render("404"), status=404); }
 
 
@@ -50,7 +47,8 @@ route(.GET, "/submission/:id", () {
     id, id_valid := param_get_int("id");
     if !id_valid then Reroute(not_found);
 
-    submission := select_by_id(Submission, id) ? Reroute(not_found);
+    submission := select_by_id(Submission, id) || Reroute(not_found);
+
     fetch_comments(*submission);
 
     Respond_Index(
@@ -102,8 +100,8 @@ route(.POST, "/submit", () {
 //---- user detail -------------------------------------------------------------
 route(.GET, "/user/:name", () {
     name := param_get("name");
+    user := select_from(User, where="name = ?", name, limit=1) || Reroute(not_found);
 
-    user := select_from(User, where="name = ?", name, limit=1) ? Reroute(not_found);
     user.submissions = select_from(Submission, where="submitter_id = ?", user.id);
 
     Respond_Index(tprint("user %", user.name), Render("user", user));
@@ -123,7 +121,7 @@ route(.POST, "/login", () {
     name, name_given := param_get("name");
     if !name_given || name == "" then Reroute(login_form, "No user name provided.");
 
-    user := select_from(User, where="name = ?", name, limit=1) ? Reroute(login_form, "User does not exist.");
+    user := select_from(User, where="name = ?", name, limit=1) || Reroute(login_form, "User does not exist.");
 
     password, password_given := param_get("password");
     if !password_given {
