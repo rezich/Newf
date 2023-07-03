@@ -12,9 +12,7 @@ Template :: struct {
 Render :: (
     $template_name: string,
             __data: $T,
-      nested_depth:=0,
-               loc:=#caller_location, // unused, for now
-       caller_code:=#caller_code      // unused, for now
+      nested_depth:=0
 ) -> string
 #modify {
         info := cast(*Type_Info) T;
@@ -88,22 +86,18 @@ XX);
     return builder_to_string(*sb, allocator=temp);
 }
 
-Render :: (
+/*Render :: inline (
            __data: $T,
-   $template_name: string,
-              loc:=#caller_location,
-      caller_code:=#caller_code
+   $template_name: string
 ) -> string
 #modify { return (cast(*Type_Info) T).type != .STRING; } #expand {
-    return Render(template_name, __data, loc=loc, caller_code=caller_code);
-}
+    return Render(template_name, __data);
+}*/
 
-Render :: (
-   $template_name: string,
-              loc:=#caller_location,
-      caller_code:=#caller_code
+Render :: inline (
+   $template_name: string
 ) -> string {
-    return Render(template_name, void, loc=loc, caller_code=caller_code);
+    return Render(template_name, void);
 }
 
 templates: Table(string, Template);
@@ -123,7 +117,7 @@ get_or_load_template :: (name: string, relative_template_path: string = "/templa
     existing_template := table_find_pointer(*templates, name);
     if existing_template then return existing_template;
 
-    new_template := table_add(*templates, name, .{});
+    new_template := table_add(*templates, name, .{name=name});
 
     filename := get_filename_from_template_name(name);
     file_contents, file_was_read := read_entire_file(filename);

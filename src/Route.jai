@@ -49,7 +49,7 @@ free_routes :: () {
     array_free(after_routes);
 }
 
-route :: (
+route :: inline (
     method: Request.Method,
     path: string,
     proc: Route.Proc/*,

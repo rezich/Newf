@@ -22,3 +22,5 @@ jai dorknews.jai
 .\bin\www
 ```
 This serves dorknews locally on port 8000 (when `BUILD` is set to `.DEVELOPMENT` -- see [`src/Main.jai`](src/Main.jai)). Visit [localhost:8000](http://localhost:8000) in your browser to view the website.
+
+To run a performance report on the compilation process, do `jai dorknews.jai - perf`.

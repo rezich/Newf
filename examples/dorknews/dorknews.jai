@@ -2,7 +2,9 @@ OUTPUT_NAME :: "www";
 OUTPUT_PATH :: "bin";
 ENTRY_POINT :: "src/Main.jai";
 
-#run {
+#run,stallable {
+    do_performance_report := array_find(get_build_options().compile_time_command_line, "perf");
+    performance_report := (#import "Performance_Report").get_plugin();
     w := compiler_create_workspace(OUTPUT_NAME);
     if !w { print("Workspace creation failed.\n"); return; }
 
@@ -12,23 +14,20 @@ ENTRY_POINT :: "src/Main.jai";
     options.text_output_flags = 0;
     set_build_options(options, w);
 
-    compiler_begin_intercept(w);
+    intercept_flags: Intercept_Flags;
+    if do_performance_report then performance_report.before_intercept(performance_report, *intercept_flags);
+
+    compiler_begin_intercept(w, intercept_flags);
     add_build_file(ENTRY_POINT, w);
 
     SQL.prebuild_step(w);
 
     while true {
         message := compiler_wait_for_message();
+        if do_performance_report && message then performance_report.message(performance_report, message);
         if !message || message.kind == .COMPLETE then break;
-    
+
         SQL.build_step(message);
-    
-        /*if message.kind == .FAILED_IMPORT {
-            m := cast(*Message_Failed_Import) message;
-            if m.target_module_name == "Newf" || m.target_module_name == "SQLite"
-                provide_import(message.workspace, m, .PATH_TO_DIRECTORY, join(#filepath, "../../../", m.target_module_name));
-            continue;
-        }*/
     }
 
     compiler_end_intercept(w);
