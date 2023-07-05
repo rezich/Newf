@@ -1,5 +1,7 @@
 BUILD : enum { DEVELOPING; DEPLOYING; } : .DEVELOPING;
 OVERRIDE_DEPLOYING_PORT :: false;
+DEBUG_MEMORY :: false;
+VERBOSE :: false;
 
 
 #load "Models.jai";
@@ -35,7 +37,7 @@ main :: () {
         after=#code { reset_model_cache(); }),
     "main");
 
-    #if BUILD == .DEVELOPING {
+    #if DEBUG_MEMORY {
         SQLite.optional_cleanup();
           Newf.optional_cleanup();
         memory_visualizer_per_frame_update();
@@ -44,14 +46,10 @@ main :: () {
 }
 
 
-DEBUG_MEMORY, VERBOSE :: BUILD == .DEVELOPING;
-
-
 #import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
 #import "md5";
 
 using Newf   :: #import,dir "../../../../Newf"  (VERBOSE=VERBOSE, STATE_TYPE=State, SESSION_TYPE=Session);
 using SQLite :: #import,dir "../../../../SQLite"(VERBOSE=VERBOSE, USE_MODEL_CACHE=true);
-
 
 #add_context sqlite_model_cache: SQLite_Model_Cache;

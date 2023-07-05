@@ -23,4 +23,10 @@ jai dorknews.jai
 ```
 This serves dorknews locally on port 8000 (when `BUILD` is set to `.DEVELOPMENT` -- see [`src/Main.jai`](src/Main.jai)). Visit [localhost:8000](http://localhost:8000) in your browser to view the website.
 
+Alternatively, you can simply run
+```sh
+jai dorknews.jai - dev
+```
+This does the same thing as above, except it automatically runs the server after successfully compiling it, plus, it automatically recompiles & reruns the server if any changes are detected in `src/` or `templates/`. This is useful during development.
+
 To run a performance report on the compilation process, do `jai dorknews.jai - perf`.
