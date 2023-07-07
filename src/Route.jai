@@ -55,6 +55,7 @@ route :: inline (
     proc: Route.Proc/*,
     cache: Route.Cache_Settings = .{}*/
 ) { route(method=method, subdomain="", path=path, proc=proc/*, cache=cache*/); }
+
 route :: (
     method: Request.Method,
     subdomain: string,
@@ -118,7 +119,6 @@ route :: (
     }
     
     parse_route_path(*r, path);
-
     array_add(*routes, r);
 }
 
@@ -127,19 +127,6 @@ after_routes:  [..] Route.Proc;
 
 before_route :: inline (proc: Route.Proc) { array_add(*before_routes, proc); }
 after_route  :: inline (proc: Route.Proc) { array_add(*after_routes,  proc); }
-
-Respond :: (body: string = "", content_type: HTTP_Content_Type=.HTML, status: HTTP_Status=200) #expand {
-    using context.reqres;
-    content_type_string: string;
-    if content_type == {
-        case .HTML; content_type_string = "text/html; charset=utf-8";
-        case .JSON; content_type_string = "text/json; charset=utf-8";
-    }
-    header_set("Content-Type", content_type_string);
-    res.body = body;
-    res.status = 200;
-    `return;
-}
 
 Redirect :: (to: string, toast_message := "") #expand {
     using context.reqres;
@@ -154,3 +141,42 @@ Reroute :: (to: Route.Proc, toast_message := "") #expand {
     if toast_message then toast(toast_message);
     to(); `return;
 }
+
+route_static_files :: ($directory := "static") {
+    load_static_file :: (filename: string) -> [] u8 {
+        file_data, success := read_entire_file(filename);
+        if !success then compiler_report(tprint("Unable to read file '%'!\n", filename));
+        return xx file_data;
+    }
+
+    #insert -> string {
+        builder: String_Builder;
+
+        path := tprint("%1/%2", get_working_directory(), directory);
+        path_overwrite_separators(path, #char "/");
+        visit_files(path, recursive=true, *builder, (info: *File_Visit_Info, builder: *String_Builder) {
+            path := tprint("%1/%2", get_working_directory(), directory);
+            path_overwrite_separators(path, #char "/");
+            relative_filename := info.full_name;
+            path_overwrite_separators(relative_filename, #char "/");
+            relative_filename.data  += path.count;
+            relative_filename.count -= path.count;
+            _, _, extension, _ := path_decomp(relative_filename);
+            
+            print_to_builder(builder, #string END
+    route(.GET, "%1", () {
+        data :: #run add_global_data(load_static_file("%2"), .READ_ONLY);
+        Respond(data, "%3");
+    });
+END,        /* 1 */ relative_filename,
+            /* 2 */ info.full_name,
+            /* 3 */ extension
+            );
+        });
+
+        return builder_to_string(*builder);
+    }
+}
+
+#scope_file
+#import "Compiler";

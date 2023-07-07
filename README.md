@@ -26,7 +26,7 @@ Object-relational mapping/database stuff (or lack thereof)
 Despite being a Modern Web Framework, Newf does not include anything like this! However, Newf pairs
 well with [rezich/SQLite](https://github.com/rezich/SQLite), and in fact was developed alongside it.
 If you want to use Newf to make a website with any kind of database functionality, it's highly
-recommended that you check it out -- [the included example](examples/dorknews/) shows how easy it is
+recommended that you check it out -- [the included example](examples/dorknews) shows how easy it is
 to use.
 
 In the future, SQLite may be *required* to use Newf, because it'll allow for better storage of user
@@ -89,8 +89,6 @@ TODO
  - session expiry; automatically remove expired sessions
  - big cleanup in [Server.jai](src/Server.jai)
  - caching on routes!
- - a compile flag to enable template "hotloading" (actually just program-restarting), including helpful error messages
- - static file routing
  - improve HTTP request parsing & make it completely HTTP/1.0 compliant
  - HTTP 1.1
  - Linux support

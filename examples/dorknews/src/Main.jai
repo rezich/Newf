@@ -13,11 +13,7 @@ The_Algo :: (page: int = 1) -> [..] Cached(Submission) { //TODO
     return select_from(Submission, order_by=.{"created", .DESC});
 }
 
-is_logged_in :: () -> bool {
-    using context.reqres;
-    if !session then return false;
-    return session.user_id != 0;
-}
+is_logged_in :: () => context.reqres.session && context.reqres.session.user_id != 0;
 
 
 main :: () {
@@ -29,6 +25,7 @@ main :: () {
     init_model_cache();
     #if BUILD == .DEVELOPING { #load "Mock_Database.jai"; mock_database(); }
 
+    route_static_files();
     set_routes();
 
     PORT :: #ifx BUILD == .DEPLOYING && !OVERRIDE_DEPLOYING_PORT then 80; else 8000;

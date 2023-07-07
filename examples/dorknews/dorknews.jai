@@ -1,7 +1,7 @@
 OUTPUT_NAME :: "www";
 OUTPUT_PATH :: "bin";
 ENTRY_POINT :: "src/Main.jai";
-DIRECTORIES :: string.["src", "templates"];
+DIRECTORIES :: string.["src", "static", "templates"];
 
 SQLite :: #import,dir "../../../SQLite"(FROM_METAPROGRAM=true);
 
