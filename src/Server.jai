@@ -119,7 +119,7 @@ get_http_response_string :: inline (using res: *Response) -> string {
     builder: String_Builder;
     for headers append(*builder, tprint("%: %\r\n", it_index, it));
     for cookies append(*builder, tprint("Set-Cookie: %=%; Path=/\r\n", it_index, it));
-    header_string = builder_to_string(*builder, allocator=temp);
+    header_string = builder_to_string(*builder);
     return tprint("HTTP/1.0 % %\r\n%\r\n%", status, get_http_status_string(status), header_string, body);
 }
 get_http_status_string :: (status: HTTP_Status) -> string {
@@ -167,9 +167,9 @@ resolve :: (request_resolution: *$T/Request_Resolution) -> Thread_Continue_Statu
 
     request_buffer: Request_Buffer;
     waiting := true;
-    start_time := get_time();
+    start_time := seconds_since_init();
     while waiting {
-        current_time := get_time();
+        current_time := seconds_since_init();
         if server_requested_shutdown || current_time - start_time >= TIMEOUT_SECONDS { log("timed out."); return .CONTINUE; }
         bytes_received := recv(client.socket, request_buffer.data, REQUEST_BUFFER_SIZE, 0);
         if bytes_received < 0 {

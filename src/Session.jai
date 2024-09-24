@@ -15,7 +15,7 @@ begin_session :: () {
     push_context new_context {
         if !session {
             new_session_container: Session_Container;
-            token := md5(tprint("%", get_time())); //TODO: lol
+            token := md5(tprint("%", seconds_since_init())); //TODO: lol
             added := table_add(*sessions, new_session_container.token, new_session_container);
             added.token = copy_string(token);
             session = *added.session;

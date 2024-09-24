@@ -83,7 +83,7 @@ XX;
 XX);
         return builder_to_string(*sb);
     }
-    return builder_to_string(*sb, allocator=temp);
+    return builder_to_string(*sb);
 }
 
 /*Render :: inline (

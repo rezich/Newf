@@ -23,7 +23,7 @@
 #load "src/Toast.jai";
 #load "src/Util.jai";
 
-optional_cleanup :: () {
+newf_optional_cleanup :: () {
     reset_temporary_storage();
     free_routes();
     free_sessions();

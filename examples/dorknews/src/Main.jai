@@ -28,15 +28,15 @@ main :: () {
     route_static_files();
     set_routes();
 
-    PORT :: #ifx BUILD == .DEPLOYING && !OVERRIDE_DEPLOYING_PORT then 80; else 8000;
+    PORT :: #ifx BUILD == .DEPLOYING && !OVERRIDE_DEPLOYING_PORT then 80 else 8000;
     open_for(listen(
         port=PORT,
         after=#code { reset_model_cache(); }),
     "main");
 
     #if DEBUG_MEMORY {
-        SQLite.optional_cleanup();
-          Newf.optional_cleanup();
+        sqlite_optional_cleanup();
+        newf\ _optional_cleanup();
         memory_visualizer_per_frame_update();
         report_memory_leaks();
     }

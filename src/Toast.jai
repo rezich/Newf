@@ -32,5 +32,5 @@ store_unseen_toasts_in_cookie :: () {
         append(*sb, ifx first then it.message else tprint("%1%2", UNSEEN_TOASTS_SEPARATOR, it.message));
         if first then first = false;
     }
-    cookie_set(UNSEEN_TOASTS_TOKEN, builder_to_string(*sb, allocator=temp));
+    cookie_set(UNSEEN_TOASTS_TOKEN, builder_to_string(*sb));
 }

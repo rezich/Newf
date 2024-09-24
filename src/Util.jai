@@ -26,7 +26,7 @@ encode_uri_component :: (text: string) -> string {
             if should_encode(text[it]) then print_to_builder(*builder, "%%%1", text[it]);
             else append(*builder, text[it]);
         }
-        return builder_to_string(*builder, allocator=temp);
+        return builder_to_string(*builder);
     }
 }
 
@@ -54,7 +54,7 @@ decode_uri_component :: (text: string) -> string {
         else append(*builder, slice(str, next_percent, next_percent + 2));
         str = slice(str, next_percent + 3, str.count);
     }
-    return builder_to_string(*builder, allocator=temp);
+    return builder_to_string(*builder);
 }
 
 decode_form :: (text: string) -> string {
